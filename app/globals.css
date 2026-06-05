@@ -1,26 +1,49 @@
 @import "tailwindcss";
+@import "./design-tokens.css";
 
+/* Bind next/font CSS vars into the design-system tokens.
+   `--font-{display,body,mono}` are referenced by every component. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-display: var(--font-display-source), 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body:    var(--font-body-source), 'Figtree', system-ui, sans-serif;
+  --font-mono:    var(--font-mono-source), 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ---- Default theme on <html> ---------------------------------------------
+   The design system is theme-agnostic, but Lake Light is the locked direction. */
+:root,
+html {
+  /* fallbacks before data-theme paints */
+  background: #F1F3F4;
+  color: #161A1D;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html[data-theme] body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+button {
+  font-family: inherit;
 }
+
+/* Subtle fade for route transitions */
+@keyframes gf-fade {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: none; }
+}
+.gf-fade { animation: gf-fade .25s ease; }
+
+/* Mono numbers should be tabular */
+.font-mono, .gf-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide number input spinners */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }

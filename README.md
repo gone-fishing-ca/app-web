@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gone Fishing — Web
 
-## Getting Started
+Next.js 16 admin app for the **Gone Fishing** trip-planning system. Pair it with the
+Python API in `../api`. Authentication and data go through the API — the web app holds
+no secrets and stores no business data.
 
-First, run the development server:
+## Stack
+- **Next.js 16** (App Router, Turbopack, React 19)
+- **Tailwind CSS v4** + the Gone Fishing design tokens (`app/design-tokens.css`)
+- **next/font** for Bricolage Grotesque · Figtree · JetBrains Mono
+- **lucide-react** icons
+- JWT bearer auth stored in `localStorage` (`gf-token`)
+
+The Lake Light theme is the locked direction and is applied at the root
+(`data-theme="lake"`). Dark mode toggles via `data-mode` on `<html>`.
+
+## Run it
+
+The API must be running at `http://localhost:8787` (see `../api/README.md`).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+cp .env.example .env.local
+pnpm dev                   # → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sign in with the seeded organizer:
+- email: `organizer@gonefishing.app`
+- password: `Northern2026!`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## What's wired vs. stubbed
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Module | Status |
+|---|---|
+| Sign in / sign up | ✅ fully functional |
+| Trip list + create / clone | ✅ fully functional |
+| Dashboard (countdown, KPIs, crew, pack-list summary) | ✅ fully functional |
+| Participants | ✅ full CRUD + edit row |
+| Pack list (master list + per-participant statuses) | ✅ full CRUD + toggle |
+| Contacts / Itinerary / Flights / Shared gear / Food / Beverages / Budget | stub page (API endpoints exist) |
 
-## Learn More
+## File map
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  globals.css            tailwind + tokens + font bindings
+  design-tokens.css      copied from ../design/system (semantic CSS vars)
+  layout.tsx             root: theme attrs, next/font, AuthProvider
+  page.tsx               redirects to /login or /trips
+  login/page.tsx         split-hero sign-in
+  signup/page.tsx        centred-card sign-up
+  trips/
+    page.tsx             trip list / "new trip" CTA
+    new/page.tsx         create-trip form with clone-from selector
+    [id]/
+      layout.tsx         sidebar + header + dark-mode toggle
+      page.tsx           dashboard
+      participants/page.tsx
+      pack-list/page.tsx
+      {contacts,itinerary,flights,shared-gear,food,beverages,budget}/page.tsx  stubs
+components/
+  ui.tsx                 Btn · Badge · Card · Field · Wordmark · StatCard · EmptyState · …
+  stub.tsx               ModuleStub
+lib/
+  config.ts              API_BASE
+  api.ts                 typed fetch client + JWT + entity types
+  auth.tsx               AuthProvider / useAuth
+  format.ts              dates, ranges, days-until
+public/walleye/          brand assets copied from the design system
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Switching auth to Supabase
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The web app talks to whichever API is at `NEXT_PUBLIC_API_BASE`. To use Supabase Auth
+instead of the API's local users:
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Flip the API: set `AUTH_MODE=supabase`, `SUPABASE_JWT_SECRET=…` in `../api/.env`.
+2. Replace `lib/auth.tsx` so that `signIn`/`signUp` go through `@supabase/supabase-js`
+   instead of `/auth/login`. The token the web app stashes in `localStorage` then
+   becomes the Supabase JWT; everything else (`api.ts` setting
+   `Authorization: Bearer …`) stays the same.

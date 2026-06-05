@@ -1,0 +1,335 @@
+/* ============================================================================
+   GONE FISHING — Design System Foundations
+   colors_and_type.css
+
+   Three theme explorations, each with light + dark variants:
+     [data-theme="slate"]  — Northern Slate (technical / alpine)
+     [data-theme="cedar"]  — Cedar & Canvas (heritage / warm)
+     [data-theme="lake"]   — Lake Light (modern / bright)
+
+   Apply a theme + mode on a root element, e.g.:
+     <div data-theme="slate" data-mode="light"> ... </div>
+     <div data-theme="cedar" data-mode="dark"> ... </div>
+
+   All color tokens are SEMANTIC (--bg, --surface, --text, --accent, etc.)
+   so components can be written once and re-skinned by swapping data-theme.
+   ========================================================================== */
+
+/* ---- Web fonts ----------------------------------------------------------
+   Fonts are loaded via next/font in app/layout.tsx — see --font-* vars there.
+   The design-system theme references CSS vars below; the next/font integration
+   binds those vars (or falls back to system fonts gracefully). */
+
+/* ============================================================================
+   1 — TYPE FAMILIES (per theme)
+   ========================================================================== */
+:root {
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Type scale (shared, fluid-ish, mobile-first) */
+  --step--1: 0.833rem;   /* 13.3px caption */
+  --step-0:  1rem;       /* 16px body */
+  --step-1:  1.2rem;     /* 19px lead */
+  --step-2:  1.44rem;    /* 23px h4 */
+  --step-3:  1.728rem;   /* 28px h3 */
+  --step-4:  2.074rem;   /* 33px h2 */
+  --step-5:  2.488rem;   /* 40px h1 */
+  --step-6:  3.45rem;    /* 55px display */
+
+  --lh-tight: 1.05;
+  --lh-snug:  1.2;
+  --lh-body:  1.55;
+
+  --tracking-tight: -0.02em;
+  --tracking-flat:   0em;
+  --tracking-wide:   0.08em;
+  --tracking-caps:   0.14em;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+}
+
+[data-theme="slate"] {
+  --font-display: 'Archivo', system-ui, sans-serif;
+  --font-body:    'Hanken Grotesk', system-ui, sans-serif;
+  --display-weight: 700;
+  --display-tracking: -0.02em;
+}
+[data-theme="cedar"] {
+  --font-display: 'Spectral', Georgia, serif;
+  --font-body:    'IBM Plex Sans', system-ui, sans-serif;
+  --display-weight: 600;
+  --display-tracking: -0.01em;
+}
+[data-theme="lake"] {
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body:    'Figtree', system-ui, sans-serif;
+  --display-weight: 700;
+  --display-tracking: -0.02em;
+}
+
+/* ============================================================================
+   2 — COLOR TOKENS
+   Each theme defines a LIGHT block (default / [data-mode="light"]) and a
+   DARK block ([data-mode="dark"]).  Tokens are semantic.
+   ========================================================================== */
+
+/* ---------- NORTHERN SLATE ------------------------------------------------ */
+[data-theme="slate"],
+[data-theme="slate"][data-mode="light"] {
+  --bg:          #F1F3F4;
+  --bg-sunk:     #E5E8EA;
+  --surface:     #FFFFFF;
+  --surface-2:   #F7F8F9;
+  --border:      #D7DCDF;
+  --border-strong:#C2C9CD;
+
+  --text:        #161A1D;
+  --text-2:      #545D64;
+  --text-3:      #828C93;
+  --on-primary:  #FFFFFF;
+  --on-accent:   #06231F;
+
+  --primary:     #2B3640;   /* deep slate */
+  --primary-700: #1E262D;
+  --primary-100: #E2E6E9;
+  --secondary:   #5E6B75;   /* steel */
+  --accent:      #109585;   /* glacial teal */
+  --accent-600:  #0C7A6D;
+  --accent-100:  #D6EEEA;
+
+  --success:     #2E8F54;
+  --warning:     #C98A1E;
+  --danger:      #CB3F2B;
+  --info:        #2F73C4;
+  --success-bg:  #E3F2E9;
+  --warning-bg:  #F8EDD6;
+  --danger-bg:   #F8E2DE;
+  --info-bg:     #E1ECF8;
+
+  --shadow-sm: 0 1px 2px rgba(22,26,29,.08), 0 1px 1px rgba(22,26,29,.04);
+  --shadow-md: 0 4px 14px rgba(22,26,29,.10);
+  --shadow-lg: 0 12px 34px rgba(22,26,29,.14);
+}
+[data-theme="slate"][data-mode="dark"] {
+  --bg:          #101417;
+  --bg-sunk:     #0A0D0F;
+  --surface:     #1A2026;
+  --surface-2:   #232B32;
+  --border:      #2C353C;
+  --border-strong:#3A454D;
+
+  --text:        #EBEFF1;
+  --text-2:      #9AA4AC;
+  --text-3:      #6C767E;
+  --on-accent:   #04201C;
+
+  --primary:     #C7D0D6;   /* light slate panel; pairs with dark on-primary */
+  --primary-700: #E3E8EB;
+  --primary-100: #232B32;
+  --secondary:   #8A97A1;
+  --accent:      #21B7A4;
+  --accent-600:  #18A091;
+  --accent-100:  #15302D;
+  --on-primary:  #0E1316;   /* dark text on the light primary panel (AA) */
+
+  --success:     #3DAA66;
+  --warning:     #E0A53A;
+  --danger:      #E2604C;
+  --info:        #4E93DE;
+  --success-bg:  #15281D;
+  --warning-bg:  #2C2410;
+  --danger-bg:   #2E1714;
+  --info-bg:     #122236;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 6px 18px rgba(0,0,0,.45);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,.55);
+}
+
+/* ---------- CEDAR & CANVAS ------------------------------------------------ */
+[data-theme="cedar"],
+[data-theme="cedar"][data-mode="light"] {
+  --bg:          #F1E9DC;
+  --bg-sunk:     #E7DCCB;
+  --surface:     #FBF6EC;
+  --surface-2:   #F4ECDD;
+  --border:      #DDCFB8;
+  --border-strong:#C8B597;
+
+  --text:        #2A241B;
+  --text-2:      #6E6353;
+  --text-3:      #978A77;
+  --on-primary:  #F4EFE4;
+  --on-accent:   #2A1408;
+
+  --primary:     #38462F;   /* deep pine / field green */
+  --primary-700: #283520;
+  --primary-100: #E3E2D0;
+  --secondary:   #7C4A2D;   /* cedar / tin-cloth brown */
+  --accent:      #C2562B;   /* rust orange */
+  --accent-600:  #A2441F;
+  --accent-100:  #F3DDCB;
+
+  --success:     #4E7A3E;
+  --warning:     #B6831E;
+  --danger:      #AF3A29;
+  --info:        #3C6E7A;
+  --success-bg:  #E6EBD8;
+  --warning-bg:  #F4E7C9;
+  --danger-bg:   #F3DCD3;
+  --info-bg:     #DEEAE9;
+
+  --shadow-sm: 0 1px 2px rgba(42,36,27,.10);
+  --shadow-md: 0 4px 14px rgba(42,36,27,.12);
+  --shadow-lg: 0 12px 32px rgba(42,36,27,.18);
+}
+[data-theme="cedar"][data-mode="dark"] {
+  --bg:          #181510;
+  --bg-sunk:     #100E0A;
+  --surface:     #221E17;
+  --surface-2:   #2C2820;
+  --border:      #38322794;
+  --border-strong:#4A4334;
+
+  --text:        #F0E7D6;
+  --text-2:      #AC9F89;
+  --text-3:      #7C7160;
+  --on-accent:   #2A1408;
+
+  --primary:     #8FA07E;   /* lichen green panel */
+  --primary-700: #A6B596;
+  --primary-100: #2C2820;
+  --secondary:   #B57A52;
+  --on-primary:  #14130D;   /* dark text on light primary panel (AA) */
+  --accent:      #DB7B3C;   /* warm amber-rust */
+  --accent-600:  #C2682E;
+  --accent-100:  #2E2114;
+
+  --success:     #6E9A55;
+  --warning:     #D6A33A;
+  --danger:      #D2614A;
+  --info:        #5C92A0;
+  --success-bg:  #1E2615;
+  --warning-bg:  #2C2410;
+  --danger-bg:   #2E1813;
+  --info-bg:     #14242A;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-md: 0 6px 18px rgba(0,0,0,.5);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,.6);
+}
+
+/* ---------- LAKE LIGHT ---------------------------------------------------- */
+[data-theme="lake"],
+[data-theme="lake"][data-mode="light"] {
+  --bg:          #F5F8FA;
+  --bg-sunk:     #E8EFF3;
+  --surface:     #FFFFFF;
+  --surface-2:   #F2F7F9;
+  --border:      #D8E3E9;
+  --border-strong:#BFD0D9;
+
+  --text:        #0F1B26;
+  --text-2:      #50616D;
+  --text-3:      #7E909C;
+  --on-primary:  #FFFFFF;
+  --on-accent:   #04201C;
+
+  --primary:     #16435E;   /* deep lake navy */
+  --primary-700: #0F3045;
+  --primary-100: #DCE7ED;
+  --secondary:   #3E89A6;   /* open-water blue */
+  --accent:      #15A695;   /* aqua teal */
+  --accent-600:  #0E8273;
+  --accent-100:  #D2EEEA;
+
+  --success:     #2C9A60;
+  --warning:     #E0A52E;
+  --danger:      #D8462F;
+  --info:        #2C84C4;
+  --success-bg:  #DEF1E7;
+  --warning-bg:  #FBEFD3;
+  --danger-bg:   #FAE1DC;
+  --info-bg:     #DCEDF8;
+
+  --shadow-sm: 0 1px 2px rgba(15,27,38,.07);
+  --shadow-md: 0 6px 18px rgba(15,27,38,.10);
+  --shadow-lg: 0 14px 38px rgba(15,27,38,.13);
+}
+[data-theme="lake"][data-mode="dark"] {
+  --bg:          #0B1620;
+  --bg-sunk:     #070F16;
+  --surface:     #122230;
+  --surface-2:   #1A2E3E;
+  --border:      #243A4B;
+  --border-strong:#324B5E;
+
+  --text:        #E9F1F6;
+  --text-2:      #91A6B3;
+  --text-3:      #647A88;
+  --on-accent:   #04201C;
+
+  --primary:     #5EA9C9;   /* bright water blue panel */
+  --primary-700: #7FBFD9;
+  --primary-100: #173142;
+  --secondary:   #5FA0BB;
+  --on-primary:  #06131D;   /* dark text on light primary panel (AA) */
+  --accent:      #1FB8A6;   /* bright aqua teal */
+  --accent-600:  #16A091;
+  --accent-100:  #123430;
+
+  --success:     #3EB276;
+  --warning:     #E8B048;
+  --danger:      #E5604A;
+  --info:        #4C9BDB;
+  --success-bg:  #102A1E;
+  --warning-bg:  #2A2410;
+  --danger-bg:   #2C1714;
+  --info-bg:     #102536;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+  --shadow-md: 0 6px 18px rgba(0,0,0,.5);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,.6);
+}
+
+/* ============================================================================
+   3 — SEMANTIC TEXT HELPERS
+   Optional element-level defaults that read from the theme tokens.
+   ========================================================================== */
+.gf-display {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--lh-tight);
+  color: var(--text);
+}
+.gf-h1 { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--step-5); line-height: var(--lh-snug); letter-spacing: var(--display-tracking); color: var(--text); }
+.gf-h2 { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--step-4); line-height: var(--lh-snug); letter-spacing: var(--display-tracking); color: var(--text); }
+.gf-h3 { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--step-3); line-height: var(--lh-snug); color: var(--text); }
+.gf-eyebrow {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--step--1);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.gf-body { font-family: var(--font-body); font-weight: 400; font-size: var(--step-0); line-height: var(--lh-body); color: var(--text-2); }
+.gf-data { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-flat); color: var(--text); }
