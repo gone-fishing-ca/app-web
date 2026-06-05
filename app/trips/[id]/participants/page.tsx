@@ -114,7 +114,10 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
                 borderTop: i ? "1px solid var(--border)" : "none",
               }}
             >
-              <div className="text-[14px] font-semibold" style={{ color: "var(--text)" }}>{p.name}</div>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[14px] font-semibold truncate" style={{ color: "var(--text)" }}>{p.name}</span>
+                {p.user_id && <Badge tone="accent">In the app</Badge>}
+              </div>
               <div className="gf-mono text-[13px]" style={{ color: "var(--text-2)" }}>{p.cell || "—"}</div>
               <div className="text-[13px] truncate" style={{ color: "var(--text-2)" }}>{p.email || "—"}</div>
               <div className="text-[13px]" style={{ color: "var(--text-2)" }}>

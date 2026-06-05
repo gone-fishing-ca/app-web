@@ -77,6 +77,7 @@ export type Trip = {
 export type Participant = {
   id: string;
   trip_id: string;
+  user_id: string | null; // linked auth account, or null for app-less roster rows
   name: string;
   cell: string | null;
   email: string | null;
