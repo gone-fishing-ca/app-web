@@ -1,10 +1,10 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { BedDouble, ChevronDown, ChevronRight, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { BedDouble, ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
 import { Badge, Btn, Card, EmptyState, Field, SectionTitle } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
-import { api, type Cabin, type Lake, type Participant, type Segment, type Stay } from "@/lib/api";
+import { api, type Cabin, type Invitation, type Lake, type Participant, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
 
 type Draft = {
@@ -17,7 +17,7 @@ type Draft = {
 
 const EMPTY: Draft = { name: "", cell: "", email: "", car_group: "" };
 
-const COLS = "1.4fr 0.9fr 1.6fr 0.6fr 0.9fr 92px";
+const COLS = "1.4fr 0.9fr 1.5fr 0.5fr 0.7fr 196px";
 
 type EditorState = { participantId: string; participantName: string; stay: Stay | null };
 
@@ -27,18 +27,36 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   const [lakes, setLakes] = useState<Lake[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
+  const [invites, setInvites] = useState<Invitation[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [inviting, setInviting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setItems).catch((e) => setError(e.message ?? "Load failed"));
     api.get<Lake[]>(`/trips/${tripId}/lakes`).then(setLakes).catch(() => {});
     api.get<Segment[]>(`/trips/${tripId}/segments`).then(setSegments).catch(() => {});
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
+    // Organizer-only; non-organizers 403 here — just skip the invite UI then.
+    api.get<Invitation[]>(`/trips/${tripId}/invitations`).then(setInvites).catch(() => {});
   }, [tripId]);
+
+  // Latest invitation per email (list is newest-first), for showing invite status.
+  const inviteByEmail = useMemo(() => {
+    const m = new Map<string, Invitation>();
+    for (const inv of invites) { const k = inv.email.toLowerCase(); if (!m.has(k)) m.set(k, inv); }
+    return m;
+  }, [invites]);
+
+  function pendingInviteFor(p: Participant): Invitation | undefined {
+    if (!p.email) return undefined;
+    const inv = inviteByEmail.get(p.email.toLowerCase());
+    return inv && inv.status === "pending" && new Date(inv.expires_at).getTime() > Date.now() ? inv : undefined;
+  }
 
   const lakeMap = useMemo(() => new Map(lakes.map((l) => [l.id, l])), [lakes]);
   const segMap = useMemo(() => new Map(segments.map((s) => [s.id, s])), [segments]);
@@ -93,6 +111,21 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  async function invite(p: Participant) {
+    if (!p.email) return;
+    setInviting(p.id); setError(null); setNotice(null);
+    try {
+      const created = await api.post<Invitation>(`/trips/${tripId}/invitations`, { email: p.email });
+      // A re-invite supersedes prior pending invites to the same address.
+      setInvites((prev) => [created, ...prev.filter((i) => !(i.email.toLowerCase() === created.email.toLowerCase() && i.status === "pending"))]);
+      setNotice(`Invitation sent to ${created.email}.`);
+    } catch (e) {
+      setError(e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : "Could not send invitation");
+    } finally {
+      setInviting(null);
+    }
+  }
+
   function upsertStay(s: Stay) {
     setStays((prev) => {
       const i = prev.findIndex((x) => x.id === s.id);
@@ -116,6 +149,10 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
         Participants
       </SectionTitle>
 
+      {notice && (
+        <div className="mb-4 rounded-[10px] px-3 py-2.5 text-[13px]"
+          style={{ background: "var(--success-bg)", color: "var(--success)" }}>{notice}</div>
+      )}
       {error && (
         <div className="mb-4 rounded-[10px] px-3 py-2.5 text-[13px]"
           style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
@@ -138,12 +175,13 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
           {items.map((p, i) => {
             const myStays = staysByParticipant.get(p.id) ?? [];
             const open = expanded.has(p.id);
+            const pendingInv = pendingInviteFor(p);
             return (
               <div key={p.id} style={{ borderTop: i ? "1px solid var(--border)" : "none" }}>
                 <div className="grid items-center px-5 py-3" style={{ gridTemplateColumns: COLS }}>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[14px] font-semibold truncate" style={{ color: "var(--text)" }}>{p.name}</span>
-                    {p.user_id && <Badge tone="accent">In the app</Badge>}
+                    {p.user_id ? <Badge tone="accent">In the app</Badge> : pendingInv && <Badge tone="warning" dot>Invited</Badge>}
                   </div>
                   <div className="gf-mono text-[13px]" style={{ color: "var(--text-2)" }}>{p.cell || "—"}</div>
                   <div className="text-[13px] truncate" style={{ color: "var(--text-2)" }}>{p.email || "—"}</div>
@@ -154,6 +192,12 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
                     {myStays.length || "0"}
                   </button>
                   <div className="flex items-center justify-end gap-1">
+                    {!p.user_id && p.email && (
+                      <Btn kind="subtle" size="sm" icon={Send} disabled={inviting === p.id} onClick={() => invite(p)}
+                        title={pendingInv ? "Resend the invitation" : "Email an invitation to join"}>
+                        {inviting === p.id ? "Sending…" : pendingInv ? "Resend" : "Invite"}
+                      </Btn>
+                    )}
                     <IconBtn title="Edit" onClick={() => startEdit(p)}><Pencil size={14} /></IconBtn>
                     <IconBtn title="Delete" onClick={() => remove(p.id)}><Trash2 size={14} /></IconBtn>
                   </div>
