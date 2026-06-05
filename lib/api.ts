@@ -98,3 +98,24 @@ export type PackStatus = {
   participant_id: string;
   done: boolean;
 };
+export type InviteStatus = "pending" | "accepted" | "revoked";
+export type Invitation = {
+  id: string;
+  trip_id: string;
+  email: string;
+  role: "organizer" | "participant";
+  status: InviteStatus;
+  created_at: string;
+  expires_at: string;
+};
+/** Public view returned by GET /invitations/{token} — what an invitee sees. */
+export type InvitePublic = {
+  trip_id: string;
+  trip_name: string;
+  destination: string | null;
+  inviter_name: string | null;
+  email: string;
+  role: "organizer" | "participant";
+  status: InviteStatus;
+  expired: boolean;
+};

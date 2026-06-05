@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth, type OAuthProvider } from "@/lib/auth";
 
-export function SsoButtons() {
+export function SsoButtons({ redirectPath }: { redirectPath?: string }) {
   const { signInWithOAuth } = useAuth();
   const [busy, setBusy] = useState<OAuthProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -12,7 +12,7 @@ export function SsoButtons() {
     setError(null);
     setBusy(provider);
     try {
-      await signInWithOAuth(provider);
+      await signInWithOAuth(provider, redirectPath);
       // The browser is redirecting to the provider — no further UI change needed.
     } catch (e) {
       setError(extractMessage(e));

@@ -16,9 +16,23 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Where to go after auth, and an optional email to prefill — both arrive on the
+  // query string when an invite link routes someone here (?next=…&email=…).
+  const [next, setNext] = useState("/trips");
 
   useEffect(() => {
-    if (!loading && user) router.replace("/trips");
+    const q = new URLSearchParams(window.location.search);
+    const n = q.get("next");
+    if (n) setNext(n);
+    const e = q.get("email");
+    if (e) setEmail(e);
+  }, []);
+
+  useEffect(() => {
+    if (!loading && user) {
+      const n = new URLSearchParams(window.location.search).get("next") || "/trips";
+      router.replace(n);
+    }
   }, [user, loading, router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -27,7 +41,7 @@ export default function SignupPage() {
     setSubmitting(true);
     try {
       await signUp(email, password, name || undefined);
-      router.replace("/trips");
+      router.replace(next);
     } catch (err) {
       const msg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "Sign up failed";
       setError(msg);
@@ -55,7 +69,7 @@ export default function SignupPage() {
             boxShadow: "var(--shadow-lg)",
           }}
         >
-          <SsoButtons />
+          <SsoButtons redirectPath={next} />
 
           <SsoDivider>or with an email + password</SsoDivider>
 
@@ -82,7 +96,12 @@ export default function SignupPage() {
 
         <div className="text-[13px] text-center" style={{ color: "var(--text-2)" }}>
           Already on board?{" "}
-          <Link href="/login" style={{ color: "var(--accent-600)", fontWeight: 600 }}>Sign in</Link>
+          <Link
+            href={next === "/trips" ? "/login" : `/login?next=${encodeURIComponent(next)}`}
+            style={{ color: "var(--accent-600)", fontWeight: 600 }}
+          >
+            Sign in
+          </Link>
         </div>
       </div>
     </div>

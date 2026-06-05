@@ -54,7 +54,22 @@ async function makeIcon({ outPath, size, padding = 0.14, radiusFrac = 0.18 }) {
   console.log(`  wrote ${path.relative(ROOT, outPath)} (${size}x${size})`);
 }
 
+// Small, email-friendly copy of the full app icon. The shipped
+// walleye-icon.png is 512x512 / ~432KB — far too heavy to embed in an email.
+// Emails render it at 60px, so 128px stays crisp on HiDPI while dropping to a
+// few KB. Hosted alongside the original so email clients can fetch it.
+async function makeEmailIcon() {
+  const src = path.join(ROOT, "public/walleye/walleye-icon.png");
+  const out = path.join(ROOT, "public/walleye/walleye-icon-email.png");
+  await sharp(src)
+    .resize(128, 128, { fit: "cover" })
+    .png({ compressionLevel: 9 })
+    .toFile(out);
+  console.log(`  wrote ${path.relative(ROOT, out)} (128x128)`);
+}
+
 await mkdir(path.join(ROOT, "app"), { recursive: true });
 await makeIcon({ outPath: path.join(ROOT, "app/icon.png"), size: 256 });
 await makeIcon({ outPath: path.join(ROOT, "app/apple-icon.png"), size: 512 });
+await makeEmailIcon();
 console.log("done.");

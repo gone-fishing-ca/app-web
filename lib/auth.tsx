@@ -22,7 +22,7 @@ type AuthState = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
-  signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  signInWithOAuth: (provider: OAuthProvider, redirectPath?: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -70,14 +70,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw new Error(error.message);
   }, []);
 
-  const signInWithOAuth = useCallback(async (provider: OAuthProvider) => {
+  const signInWithOAuth = useCallback(async (provider: OAuthProvider, redirectPath?: string) => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         // Supabase redirects to its own /auth/v1/callback, then bounces back here.
-        // Landing on /login is fine — the useEffect above sees the session and
-        // forwards the user to /trips.
-        redirectTo: `${window.location.origin}/login`,
+        // Default lands on /login (whose effect forwards to /trips); callers can
+        // pass a path (e.g. an invite accept page) to return there instead.
+        redirectTo: `${window.location.origin}${redirectPath ?? "/login"}`,
       },
     });
     if (error) throw new Error(error.message);

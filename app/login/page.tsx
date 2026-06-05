@@ -15,9 +15,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Where to go after auth. Defaults to the trips list, but an invite link sends
+  // people here as /login?next=/invite/<token> so they return to accept.
+  const [next, setNext] = useState("/trips");
 
   useEffect(() => {
-    if (!loading && user) router.replace("/trips");
+    const n = new URLSearchParams(window.location.search).get("next");
+    if (n) setNext(n);
+  }, []);
+
+  useEffect(() => {
+    if (!loading && user) {
+      const n = new URLSearchParams(window.location.search).get("next") || "/trips";
+      router.replace(n);
+    }
   }, [user, loading, router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -26,7 +37,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await signIn(email, password);
-      router.replace("/trips");
+      router.replace(next);
     } catch (err) {
       const msg =
         err && typeof err === "object" && "message" in err
@@ -54,7 +65,7 @@ export default function LoginPage() {
             boxShadow: "var(--shadow-lg)",
           }}
         >
-          <SsoButtons />
+          <SsoButtons redirectPath={next} />
 
           <SsoDivider>or with email</SsoDivider>
 
@@ -97,7 +108,10 @@ export default function LoginPage() {
 
         <div className="text-[13px] text-center" style={{ color: "var(--text-2)" }}>
           New here?{" "}
-          <Link href="/signup" style={{ color: "var(--accent-600)", fontWeight: 600 }}>
+          <Link
+            href={next === "/trips" ? "/signup" : `/signup?next=${encodeURIComponent(next)}`}
+            style={{ color: "var(--accent-600)", fontWeight: 600 }}
+          >
             Create an account
           </Link>
         </div>
