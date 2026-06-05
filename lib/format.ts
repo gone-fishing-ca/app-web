@@ -18,6 +18,20 @@ export function fmtRange(a: string | null | undefined, b: string | null | undefi
   return fmtDate(a || b!);
 }
 
+/** Min start / max end across a set of date-bearing rows (e.g. a participant's
+ *  stays). Returns [null, null] when nothing has dates yet. */
+export function deriveSpan(
+  rows: { start_date: string | null; end_date: string | null }[],
+): [string | null, string | null] {
+  let start: string | null = null;
+  let end: string | null = null;
+  for (const r of rows) {
+    if (r.start_date && (start === null || r.start_date < start)) start = r.start_date;
+    if (r.end_date && (end === null || r.end_date > end)) end = r.end_date;
+  }
+  return [start, end];
+}
+
 export function daysUntil(d: string | null | undefined): number | null {
   if (!d) return null;
   const target = new Date(`${d}T12:00:00`);

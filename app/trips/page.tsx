@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Calendar, LogOut, MapPin, Plus, Tent, Users } from "lucide-react";
+import { Calendar, LogOut, MapPin, Plus, Tent } from "lucide-react";
 import { Btn, Card, Eyebrow, EmptyState, Wordmark } from "@/components/ui";
 import { api, type Trip } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -85,7 +85,7 @@ export default function TripsPage() {
 }
 
 function TripCard({ trip }: { trip: Trip }) {
-  const days = daysUntil(trip.fly_in_date);
+  const days = daysUntil(trip.start_date);
   return (
     <Link href={`/trips/${trip.id}`} className="block group">
       <Card pad={20} className="transition group-hover:-translate-y-0.5">
@@ -114,11 +114,8 @@ function TripCard({ trip }: { trip: Trip }) {
           {trip.destination && (
             <div className="inline-flex items-center gap-2"><MapPin size={14} />{trip.destination}</div>
           )}
-          {(trip.fly_in_date || trip.fly_out_date) && (
-            <div className="inline-flex items-center gap-2"><Calendar size={14} />{fmtRange(trip.fly_in_date, trip.fly_out_date)}</div>
-          )}
-          {trip.num_participants !== null && (
-            <div className="inline-flex items-center gap-2"><Users size={14} />{trip.num_participants} anglers</div>
+          {(trip.start_date || trip.end_date) && (
+            <div className="inline-flex items-center gap-2"><Calendar size={14} />{fmtRange(trip.start_date, trip.end_date)}</div>
           )}
         </div>
       </Card>

@@ -6,7 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Beer,
+  BedDouble,
   Calendar,
+  CalendarRange,
   ClipboardList,
   ContactRound,
   LayoutDashboard,
@@ -18,6 +20,7 @@ import {
   Users,
   Utensils,
   Wallet,
+  Waves,
   Wrench,
 } from "lucide-react";
 import { Avatar, Wordmark } from "@/components/ui";
@@ -28,6 +31,9 @@ import { daysUntil, fmtRange } from "@/lib/format";
 const NAV: { id: string; label: string; icon: typeof Users; href: string }[] = [
   { id: "",            label: "Overview",      icon: LayoutDashboard, href: "" },
   { id: "participants",label: "Participants",  icon: Users,           href: "/participants" },
+  { id: "lakes",       label: "Lakes & cabins",icon: Waves,           href: "/lakes" },
+  { id: "segments",    label: "Segments",      icon: CalendarRange,   href: "/segments" },
+  { id: "lodging",     label: "Lodging",       icon: BedDouble,       href: "/lodging" },
   { id: "invitations", label: "Invitations",   icon: Mail,            href: "/invitations" },
   { id: "contacts",    label: "Contacts",      icon: ContactRound,    href: "/contacts" },
   { id: "itinerary",   label: "Itinerary",     icon: Calendar,        href: "/itinerary" },
@@ -83,7 +89,7 @@ export default function TripLayout({
   }
 
   const base = `/trips/${tripId}`;
-  const days = trip ? daysUntil(trip.fly_in_date) : null;
+  const days = trip ? daysUntil(trip.start_date) : null;
   const initials = (user.name || user.email || "?").split(/\s|@/)[0].slice(0, 2).toUpperCase();
 
   return (
@@ -139,7 +145,7 @@ export default function TripLayout({
               {trip.name}
             </div>
             <div className="text-[12px] mt-0.5" style={{ color: "var(--text-3)" }}>
-              {[trip.destination, fmtRange(trip.fly_in_date, trip.fly_out_date)].filter(Boolean).join(" · ")}
+              {[trip.destination, fmtRange(trip.start_date, trip.end_date) || "Dates TBD"].filter(Boolean).join(" · ")}
             </div>
           </div>
         )}
@@ -166,7 +172,7 @@ export default function TripLayout({
             </div>
             {trip && (
               <div className="text-[12.5px] mt-0.5" style={{ color: "var(--text-3)" }}>
-                {[trip.destination, fmtRange(trip.fly_in_date, trip.fly_out_date)].filter(Boolean).join(" · ")}
+                {[trip.destination, fmtRange(trip.start_date, trip.end_date) || "Dates TBD"].filter(Boolean).join(" · ")}
                 {days !== null && days >= 0 && <> · <span className="gf-mono" style={{ color: "var(--accent-600)" }}>{days} days to fly-in</span></>}
               </div>
             )}

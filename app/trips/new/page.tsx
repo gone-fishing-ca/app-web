@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Compass, Copy, MapPin, PlaneTakeoff, Tent } from "lucide-react";
+import { ArrowLeft, ArrowRight, Compass, Copy, MapPin, PlaneTakeoff } from "lucide-react";
 import { Btn, Card, Eyebrow, Field } from "@/components/ui";
 import { api, type Trip } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -13,12 +13,8 @@ export default function NewTripPage() {
   const { user, loading } = useAuth();
   const [name, setName] = useState("");
   const [destination, setDestination] = useState("");
-  const [outfitterName, setOutfitterName] = useState("");
-  const [outfitterContact, setOutfitterContact] = useState("");
   const [flyIn, setFlyIn] = useState("");
   const [flyOut, setFlyOut] = useState("");
-  const [drive, setDrive] = useState("");
-  const [num, setNum] = useState<string>("");
   const [cloneFrom, setCloneFrom] = useState<string>("");
   const [existing, setExisting] = useState<Trip[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -40,12 +36,8 @@ export default function NewTripPage() {
       const trip = await api.post<Trip>("/trips", {
         name,
         destination: destination || null,
-        outfitter_name: outfitterName || null,
-        outfitter_contact: outfitterContact || null,
         fly_in_date: flyIn || null,
         fly_out_date: flyOut || null,
-        drive_date: drive || null,
-        num_participants: num ? Number(num) : null,
         clone_from: cloneFrom || null,
       });
       router.replace(`/trips/${trip.id}`);
@@ -87,23 +79,22 @@ export default function NewTripPage() {
           <Card pad={24}>
             <div className="flex flex-col gap-4">
               <Field label="Trip name" icon={Compass} value={name} required onChange={(e) => setName(e.target.value)} placeholder="Ogoki 2026" />
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Destination / lake" icon={MapPin} value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Ogoki Reservoir" />
-                <Field label="# of anglers" type="number" min={1} value={num} onChange={(e) => setNum(e.target.value)} placeholder="10" />
-              </div>
-              <Field label="Outfitter" icon={Tent} value={outfitterName} onChange={(e) => setOutfitterName(e.target.value)} placeholder="Mattice Lake Outfitters" />
-              <Field label="Outfitter contact" value={outfitterContact} onChange={(e) => setOutfitterContact(e.target.value)} placeholder="phone, email, address…" />
+              <Field label="Destination" icon={MapPin} value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Northern Ontario" hint="A high-level label. Each lake's name, outfitter, and dates are set on the Lakes page." />
             </div>
           </Card>
 
-          <Card pad={24}>
-            <div className="text-[13px] font-semibold mb-3" style={{ color: "var(--text-2)" }}>Key dates</div>
-            <div className="grid grid-cols-3 gap-4">
-              <Field label="Drive / depart" type="date" value={drive} onChange={(e) => setDrive(e.target.value)} />
-              <Field label="Fly-in" type="date" icon={PlaneTakeoff} value={flyIn} onChange={(e) => setFlyIn(e.target.value)} />
-              <Field label="Fly-out" type="date" value={flyOut} onChange={(e) => setFlyOut(e.target.value)} />
-            </div>
-          </Card>
+          {!cloneFrom && (
+            <Card pad={24}>
+              <div className="text-[13px] font-semibold" style={{ color: "var(--text-2)" }}>First fly window</div>
+              <div className="text-[12px] mt-1 mb-3" style={{ color: "var(--text-3)" }}>
+                Optional — seeds your first lake and a “Whole Trip” segment. Add more lakes later.
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Fly-in" type="date" icon={PlaneTakeoff} value={flyIn} onChange={(e) => setFlyIn(e.target.value)} />
+                <Field label="Fly-out" type="date" value={flyOut} onChange={(e) => setFlyOut(e.target.value)} />
+              </div>
+            </Card>
+          )}
 
           {existing.length > 0 && (
             <Card pad={24}>
@@ -119,7 +110,7 @@ export default function NewTripPage() {
                   <label key={t.id} className="inline-flex items-center gap-2">
                     <input type="radio" name="clone" checked={cloneFrom === t.id} onChange={() => setCloneFrom(t.id)} />
                     <span className="text-[14px]" style={{ color: "var(--text)" }}>
-                      {t.name} <span style={{ color: "var(--text-3)" }}>— copies contacts, pack list, gear, food, beverage templates, and participants</span>
+                      {t.name} <span style={{ color: "var(--text-3)" }}>— copies lakes, cabins, segments, contacts, pack list, gear, food, beverage templates, and participants (stays start fresh)</span>
                     </span>
                   </label>
                 ))}

@@ -6,34 +6,47 @@ import {
   Calendar,
   ClipboardList,
   MapPin,
-  Package,
-  PlaneTakeoff,
   Users,
+  Waves,
 } from "lucide-react";
 import { Card, Eyebrow, SectionTitle, StatCard } from "@/components/ui";
-import { api, type PackItem, type PackStatus, type Participant, type Trip } from "@/lib/api";
-import { daysUntil, fmtRange } from "@/lib/format";
+import { api, type Lake, type PackItem, type PackStatus, type Participant, type Stay, type Trip } from "@/lib/api";
+import { daysUntil, deriveSpan, fmtRange } from "@/lib/format";
 
 export default function TripDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id: tripId } = use(params);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [lakes, setLakes] = useState<Lake[]>([]);
+  const [stays, setStays] = useState<Stay[]>([]);
   const [packItems, setPackItems] = useState<PackItem[]>([]);
   const [statuses, setStatuses] = useState<PackStatus[]>([]);
 
   useEffect(() => {
     api.get<Trip>(`/trips/${tripId}`).then(setTrip).catch(() => {});
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setParticipants).catch(() => {});
+    api.get<Lake[]>(`/trips/${tripId}/lakes`).then(setLakes).catch(() => {});
+    api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
     api.get<PackItem[]>(`/trips/${tripId}/pack-list/items`).then(setPackItems).catch(() => {});
     api.get<PackStatus[]>(`/trips/${tripId}/pack-list/statuses`).then(setStatuses).catch(() => {});
   }, [tripId]);
 
   if (!trip) return <div className="p-8" style={{ color: "var(--text-3)" }}>Loading…</div>;
 
-  const days = daysUntil(trip.fly_in_date);
+  const days = daysUntil(trip.start_date);
   const totalSlots = packItems.length * participants.length;
   const packed = statuses.filter((s) => s.done).length;
   const pct = totalSlots > 0 ? Math.round((packed / totalSlots) * 100) : 0;
+  const tripLength = trip.start_date && trip.end_date
+    ? Math.round((new Date(`${trip.end_date}T12:00:00`).getTime() - new Date(`${trip.start_date}T12:00:00`).getTime()) / 86_400_000) + 1
+    : null;
+  // Group stays by participant for the crew list's per-person span.
+  const staysByParticipant = new Map<string, Stay[]>();
+  for (const s of stays) {
+    const arr = staysByParticipant.get(s.participant_id) ?? [];
+    arr.push(s);
+    staysByParticipant.set(s.participant_id, arr);
+  }
 
   return (
     <div className="p-7 max-w-[1240px] mx-auto">
@@ -61,9 +74,9 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
               {trip.destination && (
                 <span className="inline-flex items-center gap-1.5"><MapPin size={15} /> {trip.destination}</span>
               )}
-              <span className="inline-flex items-center gap-1.5"><Calendar size={15} /> {fmtRange(trip.fly_in_date, trip.fly_out_date)}</span>
-              {trip.outfitter_name && (
-                <span className="inline-flex items-center gap-1.5"><PlaneTakeoff size={15} /> {trip.outfitter_name}</span>
+              <span className="inline-flex items-center gap-1.5"><Calendar size={15} /> {fmtRange(trip.start_date, trip.end_date) || "Dates TBD"}</span>
+              {lakes.length > 0 && (
+                <span className="inline-flex items-center gap-1.5"><Waves size={15} /> {lakes.length} {lakes.length === 1 ? "lake" : "lakes"}</span>
               )}
             </div>
           </div>
@@ -74,10 +87,10 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard icon={Users} label="Participants" value={participants.length} foot={trip.num_participants ? `of ${trip.num_participants} expected` : undefined} tone="primary" />
-        <StatCard icon={Package} label="Pack items" value={packItems.length} foot="across all categories" />
+        <StatCard icon={Users} label="Participants" value={participants.length} foot="on the roster" tone="primary" />
+        <StatCard icon={Waves} label="Lakes" value={lakes.length} foot="stops on the trip" />
         <StatCard icon={ClipboardList} label="Packed progress" value={`${packed} / ${totalSlots}`} foot={`${pct}% complete`} tone="primary" />
-        <StatCard icon={Calendar} label="Fly-in" value={fmtRange(trip.fly_in_date, null) || "—"} />
+        <StatCard icon={Calendar} label="Trip length" value={tripLength !== null ? `${tripLength} d` : "—"} foot={fmtRange(trip.start_date, trip.end_date) || "no dates yet"} />
       </div>
 
       {/* Quick lists */}
@@ -92,7 +105,9 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
             {participants.length === 0 ? (
               <div className="p-5 text-[14px]" style={{ color: "var(--text-3)" }}>No participants yet.</div>
             ) : (
-              participants.slice(0, 8).map((p, i) => (
+              participants.slice(0, 8).map((p, i) => {
+                const [pStart, pEnd] = deriveSpan(staysByParticipant.get(p.id) ?? []);
+                return (
                 <div key={p.id}
                   className="flex items-center gap-3 px-5 py-3.5"
                   style={{ borderTop: i ? "1px solid var(--border)" : "none" }}
@@ -105,11 +120,12 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
                   <div className="flex-1 min-w-0">
                     <div className="text-[14px] font-semibold truncate" style={{ color: "var(--text)" }}>{p.name}</div>
                     <div className="text-[12.5px]" style={{ color: "var(--text-3)" }}>
-                      {[fmtRange(p.start_date, p.end_date), p.car_group ? `Car ${p.car_group}` : null].filter(Boolean).join(" · ")}
+                      {[fmtRange(pStart, pEnd), p.car_group ? `Car ${p.car_group}` : null].filter(Boolean).join(" · ") || "No stays yet"}
                     </div>
                   </div>
                 </div>
-              ))
+              );
+              })
             )}
           </Card>
         </div>

@@ -67,12 +67,10 @@ export type Trip = {
   organizer_id: string;
   name: string;
   destination: string | null;
-  outfitter_name: string | null;
-  outfitter_contact: string | null;
-  fly_in_date: string | null;
-  fly_out_date: string | null;
-  drive_date: string | null;
-  num_participants: number | null;
+  // Derived server-side (min/max of stays, falling back to lake fly windows).
+  // Read-only; null before any lakes/stays exist.
+  start_date: string | null;
+  end_date: string | null;
 };
 export type Participant = {
   id: string;
@@ -81,9 +79,51 @@ export type Participant = {
   name: string;
   cell: string | null;
   email: string | null;
+  car_group: string | null;
+  // No dates here — a participant's span comes from their stays.
+};
+
+/** A sleeping unit at a lake. */
+export type Cabin = {
+  id: string;
+  lake_id: string;
+  name: string;
+  capacity: number | null;
+  notes: string | null;
+  sort_order: number;
+};
+/** A stop on the trip: its own outfitter + fly window, with cabins nested. */
+export type Lake = {
+  id: string;
+  trip_id: string;
+  name: string;
+  outfitter_name: string | null;
+  outfitter_contact: string | null;
+  fly_in_date: string | null;
+  fly_out_date: string | null;
+  sort_order: number;
+  cabins: Cabin[];
+};
+/** A reusable named date range ("Week 1") — a template, not tied to a lake. */
+export type Segment = {
+  id: string;
+  trip_id: string;
+  name: string;
   start_date: string | null;
   end_date: string | null;
-  car_group: string | null;
+  sort_order: number;
+};
+/** One participant, at one lake, for a date range, in an assigned cabin.
+ *  Adopt a segment's dates by sending segment_id with no start/end. */
+export type Stay = {
+  id: string;
+  participant_id: string;
+  lake_id: string;
+  cabin_id: string | null;
+  segment_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  notes: string | null;
 };
 export type PackItem = {
   id: string;
