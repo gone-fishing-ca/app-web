@@ -82,15 +82,22 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
   async function save() {
     if (!draft) return;
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setNotice(null);
     const body = { name: draft.name, cell: draft.cell || null, email: draft.email || null, car_group: draft.car_group || null };
     try {
+      const wasLinked = draft.id ? Boolean(items?.find((p) => p.id === draft.id)?.user_id) : false;
+      let saved: Participant;
       if (draft.id) {
-        const updated = await api.patch<Participant>(`/trips/${tripId}/participants/${draft.id}`, body);
-        setItems((prev) => prev?.map((p) => (p.id === updated.id ? updated : p)) ?? null);
+        saved = await api.patch<Participant>(`/trips/${tripId}/participants/${draft.id}`, body);
+        setItems((prev) => prev?.map((p) => (p.id === saved.id ? saved : p)) ?? null);
       } else {
-        const created = await api.post<Participant>(`/trips/${tripId}/participants`, body);
-        setItems((prev) => (prev ? [...prev, created] : [created]));
+        saved = await api.post<Participant>(`/trips/${tripId}/participants`, body);
+        setItems((prev) => (prev ? [...prev, saved] : [saved]));
+      }
+      // The API auto-links a roster row to a known account when the email belongs
+      // to someone who accepted a past invite from this organizer.
+      if (saved.user_id && !wasLinked) {
+        setNotice(`${saved.name} was already in the app — added directly, no invite needed.`);
       }
       setDraft(null);
     } catch (e) {
