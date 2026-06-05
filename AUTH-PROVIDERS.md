@@ -11,6 +11,13 @@ This document covers the **one-time provider configuration** in three parts:
 2. [Google](#2-google) — ~10 min, free
 3. [Apple](#3-apple) — ~30 min, requires Apple Developer Program ($99/yr)
 
+> **Status (2026-06):** Only Google is currently exposed in the UI. The Apple
+> section below is preserved for when an Apple Developer account is justified
+> — most likely once an iOS app ships and Apple's "Sign in with Apple"
+> requirement kicks in. To re-add the button: widen `OAuthProvider` in
+> `lib/auth.tsx` to include `"apple"` and add an Apple button in
+> `components/sso.tsx` (the original implementation is in git history).
+
 ---
 
 ## Why not Firebase?

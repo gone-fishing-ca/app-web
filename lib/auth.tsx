@@ -13,7 +13,9 @@ import type { Provider, User as SbUser } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { User } from "./api";
 
-export type OAuthProvider = Extract<Provider, "google" | "apple">;
+// Currently we ship only Google SSO. Apple is documented in
+// AUTH-PROVIDERS.md and easy to re-add — widen this union when you do.
+export type OAuthProvider = Extract<Provider, "google">;
 
 type AuthState = {
   user: User | null;
