@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Lock, Mail, User } from "lucide-react";
 import { Btn, Field, Wordmark } from "@/components/ui";
+import { SsoButtons, SsoDivider } from "@/components/sso";
 import { useAuth } from "@/lib/auth";
 
 export default function SignupPage() {
@@ -47,13 +48,17 @@ export default function SignupPage() {
         </div>
 
         <div
-          className="rounded-2xl p-6 flex flex-col gap-3"
+          className="rounded-2xl p-6 flex flex-col gap-4"
           style={{
             background: "var(--surface)",
             border: "1px solid var(--border)",
             boxShadow: "var(--shadow-lg)",
           }}
         >
+          <SsoButtons />
+
+          <SsoDivider>or with an email + password</SsoDivider>
+
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <Field label="Your name" icon={User} value={name} onChange={(e) => setName(e.target.value)}
               placeholder="Marcus Townsend" autoComplete="name" />

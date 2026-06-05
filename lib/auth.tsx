@@ -9,15 +9,18 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import type { User as SbUser } from "@supabase/supabase-js";
+import type { Provider, User as SbUser } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { User } from "./api";
+
+export type OAuthProvider = Extract<Provider, "google" | "apple">;
 
 type AuthState = {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
+  signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -65,14 +68,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw new Error(error.message);
   }, []);
 
+  const signInWithOAuth = useCallback(async (provider: OAuthProvider) => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        // Supabase redirects to its own /auth/v1/callback, then bounces back here.
+        // Landing on /login is fine — the useEffect above sees the session and
+        // forwards the user to /trips.
+        redirectTo: `${window.location.origin}/login`,
+      },
+    });
+    if (error) throw new Error(error.message);
+    // The browser is about to navigate away to the provider; nothing else to do.
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     router.replace("/login");
   }, [router]);
 
   const value = useMemo(
-    () => ({ user, loading, signIn, signUp, signOut }),
-    [user, loading, signIn, signUp, signOut],
+    () => ({ user, loading, signIn, signUp, signInWithOAuth, signOut }),
+    [user, loading, signIn, signUp, signInWithOAuth, signOut],
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

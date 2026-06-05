@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Calendar, Lock, Mail, MapPin, ShieldCheck, Users } from "lucide-react";
 import { Btn, Eyebrow, Field, Wordmark } from "@/components/ui";
+import { SsoButtons, SsoDivider } from "@/components/sso";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -95,6 +96,10 @@ export default function LoginPage() {
               Sign in to keep the trip on track.
             </div>
           </div>
+
+          <SsoButtons />
+
+          <SsoDivider>or sign in with email</SsoDivider>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <Field label="Email" type="email" icon={Mail} value={email} required

@@ -34,7 +34,7 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 
 | Module | Status |
 |---|---|
-| Sign in / sign up (via Supabase Auth) | ✅ fully functional |
+| Sign in / sign up (email + Google + Apple via Supabase Auth) | ✅ wired — [see AUTH-PROVIDERS.md](./AUTH-PROVIDERS.md) for provider setup |
 | Trip list + create / clone | ✅ fully functional |
 | Dashboard (countdown, KPIs, crew, pack-list summary) | ✅ fully functional |
 | Participants | ✅ full CRUD + edit row |
