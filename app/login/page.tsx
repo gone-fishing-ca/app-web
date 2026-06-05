@@ -115,7 +115,7 @@ export default function LoginPage() {
           <div className="text-[13px] text-center" style={{ color: "var(--text-2)" }}>
             New here?{" "}
             <Link href="/signup" style={{ color: "var(--accent-600)", fontWeight: 600 }}>
-              Create an organizer account
+              Create an account
             </Link>
           </div>
         </div>

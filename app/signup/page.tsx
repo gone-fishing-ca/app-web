@@ -43,7 +43,7 @@ export default function SignupPage() {
           <img src="/walleye/walleye-icon.png" alt="" style={{ width: 72, height: 72, borderRadius: 18 }} />
           <Wordmark size={22} />
           <div className="text-[14.5px]" style={{ color: "var(--text-2)" }}>
-            Create an organizer account — start planning the next trip.
+            Create an account — for organizers and trip members alike.
           </div>
         </div>
 
