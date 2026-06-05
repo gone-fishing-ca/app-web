@@ -1,25 +1,20 @@
 import { API_BASE } from "./config";
+import { supabase } from "./supabase";
 
 export type ApiError = { status: number; message: string; detail?: unknown };
 
-const TOKEN_KEY = "gf-token";
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string | null) {
-  if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
+/** Pulls the current access token from the Supabase client. Refreshes are
+ *  handled by supabase-js internally — we always read the freshest value. */
+async function getAccessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const tok = getToken();
+  const tok = await getAccessToken();
   if (tok) headers.set("Authorization", `Bearer ${tok}`);
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });

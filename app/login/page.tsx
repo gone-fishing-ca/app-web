@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Calendar, Lock, Mail, MapPin, ShieldCheck, Users } from "lucide-react";
-import { Btn, Card, Eyebrow, Field, Wordmark } from "@/components/ui";
+import { Btn, Eyebrow, Field, Wordmark } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, signIn, loading } = useAuth();
-  const [email, setEmail] = useState("organizer@gonefishing.app");
-  const [password, setPassword] = useState("Northern2026!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

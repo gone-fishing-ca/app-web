@@ -1,15 +1,16 @@
 # Gone Fishing — Web
 
 Next.js 16 admin app for the **Gone Fishing** trip-planning system. Pair it with the
-Python API in `../api`. Authentication and data go through the API — the web app holds
-no secrets and stores no business data.
+Python API in `../api`. Authentication runs through **Supabase Auth**; data goes
+through the API. The web app holds no secrets.
 
 ## Stack
 - **Next.js 16** (App Router, Turbopack, React 19)
 - **Tailwind CSS v4** + the Gone Fishing design tokens (`app/design-tokens.css`)
 - **next/font** for Bricolage Grotesque · Figtree · JetBrains Mono
 - **lucide-react** icons
-- JWT bearer auth stored in `localStorage` (`gf-token`)
+- **@supabase/supabase-js** for auth (session persisted in localStorage, tokens
+  auto-refreshed); the access token is forwarded to the API as a bearer.
 
 The Lake Light theme is the locked direction and is applied at the root
 (`data-theme="lake"`). Dark mode toggles via `data-mode` on `<html>`.
@@ -21,18 +22,19 @@ The API must be running at `http://localhost:8787` (see `../api/README.md`).
 ```bash
 pnpm install
 cp .env.example .env.local
+# then fill in NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 pnpm dev                   # → http://localhost:3000
 ```
 
-Sign in with the seeded organizer:
-- email: `organizer@gonefishing.app`
-- password: `Northern2026!`
+Sign up once (creates the user in Supabase `auth.users`), then sign in. The
+seeded `organizer@gonefishing.app` credentials only work when the API is in
+`AUTH_MODE=local`.
 
 ## What's wired vs. stubbed
 
 | Module | Status |
 |---|---|
-| Sign in / sign up | ✅ fully functional |
+| Sign in / sign up (via Supabase Auth) | ✅ fully functional |
 | Trip list + create / clone | ✅ fully functional |
 | Dashboard (countdown, KPIs, crew, pack-list summary) | ✅ fully functional |
 | Participants | ✅ full CRUD + edit row |
@@ -63,19 +65,22 @@ components/
   stub.tsx               ModuleStub
 lib/
   config.ts              API_BASE
-  api.ts                 typed fetch client + JWT + entity types
-  auth.tsx               AuthProvider / useAuth
+  supabase.ts            browser Supabase client
+  auth.tsx               AuthProvider / useAuth (Supabase-backed)
+  api.ts                 typed fetch client; pulls bearer from supabase session
   format.ts              dates, ranges, days-until
 public/walleye/          brand assets copied from the design system
 ```
 
-## Switching auth to Supabase
+## How auth flows through
 
-The web app talks to whichever API is at `NEXT_PUBLIC_API_BASE`. To use Supabase Auth
-instead of the API's local users:
+```
+User → Supabase Auth (signInWithPassword)
+     → access_token (ES256 JWT, ~1h, auto-refreshed by supabase-js)
+     → forwarded as `Authorization: Bearer …` to FastAPI
+     → API verifies via Supabase's public JWKS, scopes data by JWT `sub` (UUID)
+```
 
-1. Flip the API: set `AUTH_MODE=supabase`, `SUPABASE_JWT_SECRET=…` in `../api/.env`.
-2. Replace `lib/auth.tsx` so that `signIn`/`signUp` go through `@supabase/supabase-js`
-   instead of `/auth/login`. The token the web app stashes in `localStorage` then
-   becomes the Supabase JWT; everything else (`api.ts` setting
-   `Authorization: Bearer …`) stays the same.
+`lib/api.ts` reads the current token from `supabase.auth.getSession()` before
+every request, so token refreshes are transparent — never touch
+`localStorage["gf-token"]` directly.

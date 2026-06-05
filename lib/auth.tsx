@@ -9,19 +9,26 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { api, getToken, setToken, type User } from "./api";
+import type { User as SbUser } from "@supabase/supabase-js";
+import { supabase } from "./supabase";
+import type { User } from "./api";
 
 type AuthState = {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 };
 
 const AuthCtx = createContext<AuthState | null>(null);
 
-type TokenRes = { access_token: string; token_type: string; user: User };
+function toAppUser(u: SbUser | null | undefined): User | null {
+  if (!u) return null;
+  const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
+  const name = (meta.name as string | undefined) ?? (meta.full_name as string | undefined) ?? null;
+  return { id: u.id, email: u.email ?? "", name };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -29,36 +36,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!getToken()) { setLoading(false); return; }
-      try {
-        const me = await api.get<User>("/auth/me");
-        if (!cancelled) setUser(me);
-      } catch {
-        setToken(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setUser(toAppUser(data.session?.user ?? null));
+      setLoading(false);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(toAppUser(session?.user ?? null));
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const res = await api.post<TokenRes>("/auth/login", { email, password });
-    setToken(res.access_token);
-    setUser(res.user);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name?: string) => {
-    const res = await api.post<TokenRes>("/auth/signup", { email, password, name });
-    setToken(res.access_token);
-    setUser(res.user);
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: name ? { name } : undefined },
+    });
+    if (error) throw new Error(error.message);
   }, []);
 
-  const signOut = useCallback(() => {
-    setToken(null);
-    setUser(null);
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
     router.replace("/login");
   }, [router]);
 
