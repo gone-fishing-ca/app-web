@@ -149,7 +149,7 @@ export function StayEditor({
             )}
             {segments.length === 0 && (
               <div className="text-[12px]" style={{ color: "var(--text-3)" }}>
-                No segments defined — using custom dates. Define reusable weeks on the Segments page.
+                No weeks defined yet — using custom dates. Lay out your trip’s weeks on the Schedule page.
               </div>
             )}
           </div>

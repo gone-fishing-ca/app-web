@@ -108,7 +108,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   }
 
   async function remove(id: string) {
-    if (!confirm("Remove this participant?")) return;
+    if (!confirm("Remove this person?")) return;
     try {
       await api.del(`/trips/${tripId}/participants/${id}`);
       setItems((prev) => prev?.filter((p) => p.id !== id) ?? null);
@@ -152,8 +152,8 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="p-7 max-w-[1180px] mx-auto">
-      <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={startNew}>Add participant</Btn>}>
-        Participants
+      <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={startNew}>Add person</Btn>}>
+        Group
       </SectionTitle>
 
       {notice && (
@@ -168,9 +168,9 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
       {items === null ? (
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
       ) : items.length === 0 && !draft ? (
-        <EmptyState icon={Users} title="No participants yet"
+        <EmptyState icon={Users} title="No one in the group yet"
           subtitle="Add the first angler — you can stub the rest now and fill in details later."
-          action={<Btn kind="accent" icon={Plus} onClick={startNew}>Add participant</Btn>} />
+          action={<Btn kind="accent" icon={Plus} onClick={startNew}>Add person</Btn>} />
       ) : (
         <Card pad={0}>
           {/* header row */}
@@ -250,7 +250,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
       {draft && (
         <Card pad={20} className="mt-5">
           <div className="text-[13px] font-bold uppercase mb-3" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
-            {draft.id ? "Edit participant" : "New participant"}
+            {draft.id ? "Edit person" : "New person"}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Marcus Townsend" />

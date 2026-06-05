@@ -45,7 +45,7 @@ export default function SegmentsPage({ params }: { params: Promise<{ id: string 
   }
 
   async function remove(id: string) {
-    if (!confirm("Delete this segment? Stays that adopted its dates keep those dates (they just become custom).")) return;
+    if (!confirm("Delete this week? Stays that adopted its dates keep those dates (they just become custom).")) return;
     try {
       await api.del(`/trips/${tripId}/segments/${id}`);
       setItems((prev) => prev?.filter((s) => s.id !== id) ?? null);
@@ -56,12 +56,12 @@ export default function SegmentsPage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="p-7 max-w-[820px] mx-auto">
-      <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={() => setDraft({ ...EMPTY })}>Add segment</Btn>}>
-        Segments
+      <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={() => setDraft({ ...EMPTY })}>Add week</Btn>}>
+        Schedule
       </SectionTitle>
 
       <p className="text-[13px] -mt-1 mb-4" style={{ color: "var(--text-3)" }}>
-        Named, reusable date ranges (e.g. “Week 1”, “Both Weeks”). They’re templates — assign them to people in Lodging to autofill stay dates. Segments may overlap.
+        Define the weeks of your trip (e.g. “Week 1”, “Week 2”, “Both Weeks”). Assign them to people in Lodging to autofill their dates. Weeks can overlap.
       </p>
 
       {error && (
@@ -72,9 +72,9 @@ export default function SegmentsPage({ params }: { params: Promise<{ id: string 
       {items === null ? (
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
       ) : items.length === 0 && !draft ? (
-        <EmptyState icon={CalendarRange} title="No segments yet"
-          subtitle="Define your week ranges once, then reuse them when assigning stays."
-          action={<Btn kind="accent" icon={Plus} onClick={() => setDraft({ ...EMPTY })}>Add segment</Btn>} />
+        <EmptyState icon={CalendarRange} title="No weeks yet"
+          subtitle="Lay out your trip’s weeks once, then reuse them when assigning stays."
+          action={<Btn kind="accent" icon={Plus} onClick={() => setDraft({ ...EMPTY })}>Add week</Btn>} />
       ) : (
         <Card>
           <div className="grid items-center px-5 py-3 text-[11.5px] font-bold uppercase"
@@ -98,7 +98,7 @@ export default function SegmentsPage({ params }: { params: Promise<{ id: string 
       {draft && (
         <Card pad={20} className="mt-5">
           <div className="text-[13px] font-bold uppercase mb-3" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
-            {draft.id ? "Edit segment" : "New segment"}
+            {draft.id ? "Edit week" : "New week"}
           </div>
           <div className="grid gap-3" style={{ gridTemplateColumns: "1.4fr 1fr 1fr" }}>
             <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Week 1" />

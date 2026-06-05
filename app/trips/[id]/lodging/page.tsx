@@ -85,16 +85,16 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
           subtitle="Add at least one lake before assigning stays."
           action={<Link href={`/trips/${tripId}/lakes`} className="text-[14px] font-semibold" style={{ color: "var(--accent-600)" }}>Go to Lakes &amp; cabins →</Link>} />
       ) : participants.length === 0 ? (
-        <EmptyState icon={BedDouble} title="No participants yet"
-          subtitle="Add people to the roster, then assign their lake stays here."
-          action={<Link href={`/trips/${tripId}/participants`} className="text-[14px] font-semibold" style={{ color: "var(--accent-600)" }}>Go to Participants →</Link>} />
+        <EmptyState icon={BedDouble} title="No one in the group yet"
+          subtitle="Add people to the group, then assign their lake stays here."
+          action={<Link href={`/trips/${tripId}/participants`} className="text-[14px] font-semibold" style={{ color: "var(--accent-600)" }}>Go to Group →</Link>} />
       ) : (
         <Card pad={0} className="overflow-x-auto">
           <div style={{ minWidth: 220 + lakes.length * colW }}>
             {/* Header: lake columns */}
             <div className="flex" style={{ borderBottom: "1px solid var(--border)" }}>
               <div className="flex-none px-5 py-3 text-[11.5px] font-bold uppercase"
-                style={{ width: 220, letterSpacing: ".05em", color: "var(--text-3)" }}>Participant</div>
+                style={{ width: 220, letterSpacing: ".05em", color: "var(--text-3)" }}>Person</div>
               {lakes.map((l) => (
                 <div key={l.id} className="flex-none px-3 py-3" style={{ width: colW, borderLeft: "1px solid var(--border)" }}>
                   <div className="text-[13px] font-semibold truncate" style={{ color: "var(--text)" }}>{l.name}</div>

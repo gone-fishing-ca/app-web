@@ -87,7 +87,7 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard icon={Users} label="Participants" value={participants.length} foot="on the roster" tone="primary" />
+        <StatCard icon={Users} label="Group" value={participants.length} foot="on the roster" tone="primary" />
         <StatCard icon={Waves} label="Lakes" value={lakes.length} foot="stops on the trip" />
         <StatCard icon={ClipboardList} label="Packed progress" value={`${packed} / ${totalSlots}`} foot={`${pct}% complete`} tone="primary" />
         <StatCard icon={Calendar} label="Trip length" value={tripLength !== null ? `${tripLength} d` : "—"} foot={fmtRange(trip.start_date, trip.end_date) || "no dates yet"} />
@@ -103,7 +103,7 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
           }>The crew</SectionTitle>
           <Card>
             {participants.length === 0 ? (
-              <div className="p-5 text-[14px]" style={{ color: "var(--text-3)" }}>No participants yet.</div>
+              <div className="p-5 text-[14px]" style={{ color: "var(--text-3)" }}>No one in the group yet.</div>
             ) : (
               participants.slice(0, 8).map((p, i) => {
                 const [pStart, pEnd] = deriveSpan(staysByParticipant.get(p.id) ?? []);
