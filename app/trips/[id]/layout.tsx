@@ -106,11 +106,11 @@ export default function TripLayout({
           <Wordmark size={18} glyph mode={mode} />
         </Link>
 
-        <Link href="/trips/new"
-          className="flex items-center justify-center gap-2 rounded-[11px] mb-4 py-2.5 font-semibold text-[14px]"
-          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
+        <Link href="/trips"
+          className="flex items-center gap-2 rounded-[11px] mb-4 px-3 py-2.5 font-semibold text-[13.5px]"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
         >
-          + New trip
+          <ArrowLeft size={16} strokeWidth={2} /> Back to all trips
         </Link>
 
         <nav className="flex flex-col gap-0.5">
@@ -131,22 +131,6 @@ export default function TripLayout({
             );
           })}
         </nav>
-
-        {trip && (
-          <div className="mt-auto px-3.5 py-3.5 rounded-xl"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
-          >
-            <div className="text-[11px] font-bold uppercase" style={{ letterSpacing: "0.12em", color: "var(--text-3)" }}>
-              Active trip
-            </div>
-            <div className="text-[13.5px] font-semibold mt-1" style={{ color: "var(--text)" }}>
-              {trip.name}
-            </div>
-            <div className="text-[12px] mt-0.5" style={{ color: "var(--text-3)" }}>
-              {[trip.destination, fmtRange(trip.start_date, trip.end_date) || "Dates TBD"].filter(Boolean).join(" · ")}
-            </div>
-          </div>
-        )}
       </aside>
 
       {/* Main */}
