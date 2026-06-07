@@ -71,6 +71,8 @@ export type Trip = {
   // Read-only; null before any lakes/stays exist.
   start_date: string | null;
   end_date: string | null;
+  // Count of people on the roster (the "Group").
+  member_count: number;
 };
 export type Participant = {
   id: string;
