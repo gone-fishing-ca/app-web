@@ -1,13 +1,16 @@
 "use client";
 
 import { clsx } from "clsx";
-import type { LucideIcon } from "lucide-react";
+import { Check, ChevronDown, type LucideIcon, Plus, Search } from "lucide-react";
 import {
   type ButtonHTMLAttributes,
   type CSSProperties,
   type InputHTMLAttributes,
   type ReactNode,
   forwardRef,
+  useEffect,
+  useRef,
+  useState,
 } from "react";
 
 /* ---- Wordmark (no glyph here — just the type) ---------------------------- */
@@ -204,6 +207,127 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
     </label>
   );
 });
+
+/* ---- ComboBox (pick existing, or create new) ----------------------------- */
+export type ComboOption = { value: string; label: string; hint?: string };
+
+/** Searchable single-select dropdown with an optional "+ Create" affordance —
+ *  the standard "pick from the catalog, or add a new one" pattern. Pass `onCreate`
+ *  to surface a create row for whatever the user has typed. */
+export function ComboBox({
+  label, value, options, placeholder = "Select…", onSelect, onCreate, createLabel, disabled,
+}: {
+  label?: string;
+  value: string | null;
+  options: ComboOption[];
+  placeholder?: string;
+  onSelect: (value: string) => void;
+  onCreate?: (query: string) => void;
+  createLabel?: (query: string) => string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value) ?? null;
+  const q = query.trim().toLowerCase();
+  const filtered = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+  const exact = options.some((o) => o.label.toLowerCase() === q);
+  const showCreate = onCreate && q.length > 0 && !exact;
+
+  function close() { setOpen(false); setQuery(""); }
+
+  return (
+    <label className="flex flex-col gap-1.5 w-full">
+      {label && (
+        <span className="text-[12.5px] font-semibold" style={{ color: "var(--text-2)" }}>{label}</span>
+      )}
+      <div ref={wrapRef} className="relative">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center w-full rounded-[11px] text-left disabled:opacity-50"
+          style={{ background: "var(--surface)", border: "1px solid var(--border-strong)" }}
+        >
+          <span
+            className="flex-1 min-w-0 truncate px-3.5 py-3 text-[14.5px]"
+            style={{ color: selected ? "var(--text)" : "var(--text-3)" }}
+          >
+            {selected ? selected.label : placeholder}
+          </span>
+          <span className="pr-3 flex" style={{ color: "var(--text-3)" }}>
+            <ChevronDown size={17} strokeWidth={1.9} />
+          </span>
+        </button>
+
+        {open && (
+          <div
+            className="absolute z-20 mt-1.5 w-full rounded-[12px] overflow-hidden shadow-lg"
+            style={{ background: "var(--surface)", border: "1px solid var(--border-strong)" }}
+          >
+            <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid var(--border)" }}>
+              <Search size={15} style={{ color: "var(--text-3)" }} />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search…"
+                className="flex-1 min-w-0 bg-transparent outline-none text-[14px]"
+                style={{ color: "var(--text)" }}
+              />
+            </div>
+            <div className="max-h-[240px] overflow-y-auto py-1">
+              {filtered.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => { onSelect(o.value); close(); }}
+                  className="flex items-center gap-2 w-full text-left px-3 py-2 text-[14px]"
+                  style={{ color: "var(--text)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <span className="flex-none w-4">
+                    {o.value === value && <Check size={15} style={{ color: "var(--accent-600)" }} />}
+                  </span>
+                  <span className="flex-1 min-w-0 truncate">{o.label}</span>
+                  {o.hint && <span className="text-[12px] flex-none" style={{ color: "var(--text-3)" }}>{o.hint}</span>}
+                </button>
+              ))}
+              {filtered.length === 0 && !showCreate && (
+                <div className="px-3 py-2.5 text-[13px]" style={{ color: "var(--text-3)" }}>No matches.</div>
+              )}
+              {showCreate && (
+                <button
+                  type="button"
+                  onClick={() => { onCreate!(query.trim()); close(); }}
+                  className="flex items-center gap-2 w-full text-left px-3 py-2 text-[14px] font-semibold"
+                  style={{ color: "var(--accent-600)", borderTop: filtered.length > 0 ? "1px solid var(--border)" : undefined }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <Plus size={15} />
+                  {createLabel ? createLabel(query.trim()) : `Create “${query.trim()}”`}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </label>
+  );
+}
 
 /* ---- Section title ------------------------------------------------------- */
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {

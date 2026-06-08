@@ -94,13 +94,37 @@ export type Cabin = {
   notes: string | null;
   sort_order: number;
 };
-/** A stop on the trip: its own outfitter + fly window, with cabins nested. */
-export type Lake = {
+/** The company that runs a lake — a reusable, owner-scoped catalog entity. */
+export type Outfitter = {
   id: string;
-  trip_id: string;
+  owner_id: string;
   name: string;
-  outfitter_name: string | null;
-  outfitter_contact: string | null;
+  contact_person: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  address: string | null;
+  notes: string | null;
+};
+/** A reusable catalog lake (owner-scoped). Not tied to a trip — linked in via
+ *  TripLake. Outfitter is embedded; cabins nested. */
+export type CatalogLake = {
+  id: string;
+  owner_id: string;
+  name: string;
+  outfitter_id: string | null;
+  outfitter: Outfitter | null;
+  cabins: Cabin[];
+};
+/** A lake as it appears *on a trip* (GET /trips/{id}/lakes). `id` is the catalog
+ *  lake id — so `stay.lake_id` joins straight to it — plus `trip_lake_id` (the join
+ *  row, used to edit the fly window / unlink) and this trip's fly dates. */
+export type TripLake = {
+  id: string;            // catalog lake id
+  trip_lake_id: string;  // TripLake join row id
+  owner_id: string;      // catalog lake owner (gates editing in the UI)
+  name: string;
+  outfitter: Outfitter | null;
   fly_in_date: string | null;
   fly_out_date: string | null;
   sort_order: number;

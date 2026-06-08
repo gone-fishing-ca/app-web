@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { BedDouble, ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
 import { Badge, Btn, Card, EmptyState, Field, SectionTitle } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
-import { api, type Cabin, type Invitation, type Lake, type Participant, type Segment, type Stay } from "@/lib/api";
+import { api, type Cabin, type Invitation, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
 
 type Draft = {
@@ -24,7 +24,7 @@ type EditorState = { participantId: string; participantName: string; stay: Stay 
 export default function ParticipantsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: tripId } = use(params);
   const [items, setItems] = useState<Participant[] | null>(null);
-  const [lakes, setLakes] = useState<Lake[]>([]);
+  const [lakes, setLakes] = useState<TripLake[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
@@ -38,7 +38,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => {
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setItems).catch((e) => setError(e.message ?? "Load failed"));
-    api.get<Lake[]>(`/trips/${tripId}/lakes`).then(setLakes).catch(() => {});
+    api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setLakes).catch(() => {});
     api.get<Segment[]>(`/trips/${tripId}/segments`).then(setSegments).catch(() => {});
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
     // Organizer-only; non-organizers 403 here — just skip the invite UI then.

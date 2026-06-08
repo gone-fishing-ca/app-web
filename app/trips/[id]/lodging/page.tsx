@@ -5,7 +5,7 @@ import Link from "next/link";
 import { BedDouble, Plus } from "lucide-react";
 import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
-import { api, type Cabin, type Lake, type Participant, type Segment, type Stay } from "@/lib/api";
+import { api, type Cabin, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
 
 type EditorState = { participantId: string; participantName: string; lakeId: string; stay: Stay | null };
@@ -13,7 +13,7 @@ type EditorState = { participantId: string; participantName: string; lakeId: str
 export default function LodgingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: tripId } = use(params);
   const [participants, setParticipants] = useState<Participant[] | null>(null);
-  const [lakes, setLakes] = useState<Lake[]>([]);
+  const [lakes, setLakes] = useState<TripLake[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -22,7 +22,7 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
   useEffect(() => {
     Promise.all([
       api.get<Participant[]>(`/trips/${tripId}/participants`),
-      api.get<Lake[]>(`/trips/${tripId}/lakes`),
+      api.get<TripLake[]>(`/trips/${tripId}/lakes`),
       api.get<Segment[]>(`/trips/${tripId}/segments`),
       api.get<Stay[]>(`/trips/${tripId}/stays`),
     ]).then(([p, l, sg, st]) => { setParticipants(p); setLakes(l); setSegments(sg); setStays(st); })

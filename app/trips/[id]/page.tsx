@@ -10,14 +10,14 @@ import {
   Waves,
 } from "lucide-react";
 import { Card, Eyebrow, SectionTitle, StatCard } from "@/components/ui";
-import { api, type Lake, type PackItem, type PackStatus, type Participant, type Stay, type Trip } from "@/lib/api";
+import { api, type TripLake, type PackItem, type PackStatus, type Participant, type Stay, type Trip } from "@/lib/api";
 import { daysUntil, deriveSpan, fmtRange } from "@/lib/format";
 
 export default function TripDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id: tripId } = use(params);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [lakes, setLakes] = useState<Lake[]>([]);
+  const [lakes, setLakes] = useState<TripLake[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
   const [packItems, setPackItems] = useState<PackItem[]>([]);
   const [statuses, setStatuses] = useState<PackStatus[]>([]);
@@ -25,7 +25,7 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
   useEffect(() => {
     api.get<Trip>(`/trips/${tripId}`).then(setTrip).catch(() => {});
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setParticipants).catch(() => {});
-    api.get<Lake[]>(`/trips/${tripId}/lakes`).then(setLakes).catch(() => {});
+    api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setLakes).catch(() => {});
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
     api.get<PackItem[]>(`/trips/${tripId}/pack-list/items`).then(setPackItems).catch(() => {});
     api.get<PackStatus[]>(`/trips/${tripId}/pack-list/statuses`).then(setStatuses).catch(() => {});

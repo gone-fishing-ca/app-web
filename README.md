@@ -39,7 +39,9 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Dashboard (countdown, KPIs, crew, pack-list summary) | ✅ fully functional |
 | Participants | ✅ full CRUD + edit row |
 | Pack list (master list + per-participant statuses) | ✅ full CRUD + toggle |
-| Contacts / Itinerary / Flights / Shared gear / Food / Beverages / Budget | stub page (API endpoints exist) |
+| Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — pick-or-create lakes/outfitters |
+| Contacts | ✅ outfitters (from linked lakes) read-only; misc contacts stubbed |
+| Itinerary / Flights / Shared gear / Food / Beverages / Budget | stub page (API endpoints exist) |
 
 ## File map
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Btn, Field } from "@/components/ui";
-import { api, type Lake, type Segment, type Stay } from "@/lib/api";
+import { api, type TripLake, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
 
 /** Shared editor for a participant's stay at a lake. Used both from the Lodging
@@ -16,7 +16,7 @@ export function StayEditor({
   tripId: string;
   participantId: string;
   participantName?: string;
-  lakes: Lake[];
+  lakes: TripLake[];
   segments: Segment[];
   stay: Stay | null;                 // null = creating
   lockedLakeId?: string;             // when opened from a grid cell
