@@ -2,9 +2,14 @@
 
 import { Plane, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
 import { Avatar, Card } from "@/components/ui";
-import { parseISO, type Day, type DayFly, type Member } from "@/lib/calendar";
+import { placeSegments, parseISO, type Day, type DayFly, type Member, type SegmentBar } from "@/lib/calendar";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// Vertical metrics (px) for the per-week segment band drawn above the day cells.
+const DAY_NUM_H = 22; // day-number row at the top of each cell
+const LANE_H = 18; // a single segment bar
+const LANE_GAP = 3; // gap between stacked lanes
 
 function initials(name: string): string {
   return (
@@ -23,12 +28,20 @@ function initials(name: string): string {
 export function TripCalendar({
   weeks,
   dayFly,
+  segmentBars,
+  laneCount,
   onPickDay,
 }: {
   weeks: Day[][];
   dayFly: Map<string, DayFly>;
+  segmentBars: SegmentBar[];
+  laneCount: number;
   onPickDay: (iso: string) => void;
 }) {
+  const bandH = laneCount > 0 ? laneCount * LANE_H + (laneCount - 1) * LANE_GAP : 0;
+  const reserveTop = DAY_NUM_H + (bandH > 0 ? bandH + 6 : 0);
+  const cellMinH = Math.max(108, reserveTop + 44);
+
   return (
     <Card pad={0} className="overflow-hidden">
       <div
@@ -45,21 +58,64 @@ export function TripCalendar({
           </div>
         ))}
       </div>
-      {weeks.map((week, wi) => (
-        <div key={week[0].iso} className="grid" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
-          {week.map((day, ci) => (
-            <DayCell
-              key={day.iso}
-              day={day}
-              fly={dayFly.get(day.iso)}
-              topBorder={wi > 0}
-              leftBorder={ci > 0}
-              onPick={onPickDay}
-            />
-          ))}
-        </div>
-      ))}
+      {weeks.map((week, wi) => {
+        const placed = bandH > 0 ? placeSegments(segmentBars, week.map((d) => d.iso)) : [];
+        return (
+          <div key={week[0].iso} className="relative">
+            <div className="grid" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+              {week.map((day, ci) => (
+                <DayCell
+                  key={day.iso}
+                  day={day}
+                  fly={dayFly.get(day.iso)}
+                  topBorder={wi > 0}
+                  leftBorder={ci > 0}
+                  reserveTop={reserveTop}
+                  minH={cellMinH}
+                  onPick={onPickDay}
+                />
+              ))}
+            </div>
+            {placed.length > 0 && (
+              <div className="pointer-events-none absolute left-0 right-0" style={{ top: DAY_NUM_H }}>
+                {placed.map((p) => (
+                  <SegmentChip key={p.id} bar={p} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </Card>
+  );
+}
+
+function SegmentChip({ bar }: { bar: ReturnType<typeof placeSegments>[number] }) {
+  const padL = bar.roundLeft ? 2 : 0;
+  const padR = bar.roundRight ? 2 : 0;
+  return (
+    <div
+      title={bar.name}
+      className="absolute flex items-center overflow-hidden text-[10.5px] font-semibold"
+      style={{
+        top: bar.lane * (LANE_H + LANE_GAP),
+        height: LANE_H,
+        left: `calc(${bar.leftPct}% + ${padL}px)`,
+        width: `calc(${bar.widthPct}% - ${padL + padR}px)`,
+        paddingInline: 6,
+        background: "var(--surface-2)",
+        border: "1px solid var(--border-strong)",
+        color: "var(--text-2)",
+        borderTopLeftRadius: bar.roundLeft ? 6 : 0,
+        borderBottomLeftRadius: bar.roundLeft ? 6 : 0,
+        borderTopRightRadius: bar.roundRight ? 6 : 0,
+        borderBottomRightRadius: bar.roundRight ? 6 : 0,
+      }}
+    >
+      {/* Label only on the week where the segment actually starts, so it isn't
+          repeated on continuation weeks. */}
+      <span className="truncate">{bar.roundLeft ? bar.name : ""}</span>
+    </div>
   );
 }
 
@@ -68,12 +124,16 @@ function DayCell({
   fly,
   topBorder,
   leftBorder,
+  reserveTop,
+  minH,
   onPick,
 }: {
   day: Day;
   fly?: DayFly;
   topBorder: boolean;
   leftBorder: boolean;
+  reserveTop: number;
+  minH: number;
   onPick: (iso: string) => void;
 }) {
   const hasIn = !!fly && fly.in.length > 0;
@@ -90,22 +150,27 @@ function DayCell({
 
   return (
     <div
-      className="flex flex-col gap-1 px-1.5 pt-1.5 pb-2"
+      className="flex flex-col px-1.5 pb-2"
       style={{
-        minHeight: 108,
+        minHeight: minH,
         borderTop: topBorder ? "1px solid var(--border)" : undefined,
         borderLeft: leftBorder ? "1px solid var(--border)" : undefined,
         background: day.inSpan ? "var(--surface)" : "var(--surface-2)",
       }}
     >
       <div
-        className="px-1 text-[12px] font-semibold"
-        style={{ color: day.inSpan ? "var(--text-2)" : "var(--text-3)" }}
+        className="flex items-center px-1 text-[12px] font-semibold"
+        style={{ height: DAY_NUM_H, color: day.inSpan ? "var(--text-2)" : "var(--text-3)" }}
       >
         {day.isFirstOfMonth ? `${day.monthLabel} ${day.dayNum}` : day.dayNum}
       </div>
 
-      {kind && <FlyChip kind={kind} count={count} clickable={clickable} onClick={() => onPick(day.iso)} />}
+      {/* Spacer reserving room for the segment band overlaid above. */}
+      {reserveTop > DAY_NUM_H && <div aria-hidden style={{ height: reserveTop - DAY_NUM_H }} />}
+
+      <div className="flex flex-col gap-1">
+        {kind && <FlyChip kind={kind} count={count} clickable={clickable} onClick={() => onPick(day.iso)} />}
+      </div>
     </div>
   );
 }

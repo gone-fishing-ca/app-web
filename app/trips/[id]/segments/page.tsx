@@ -6,7 +6,7 @@ import { Btn, Card, EmptyState, Field, SectionTitle } from "@/components/ui";
 import { TripCalendar, DayDetailModal } from "@/components/trip-calendar";
 import { api, type Participant, type Segment, type Stay, type TripLake } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
-import { aggregateFlyEvents, buildWeeks, scheduleRange } from "@/lib/calendar";
+import { aggregateFlyEvents, buildWeeks, packSegments, scheduleRange } from "@/lib/calendar";
 
 type Draft = { id?: string; name: string; start_date: string; end_date: string };
 const EMPTY: Draft = { name: "", start_date: "", end_date: "" };
@@ -62,6 +62,16 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   const weekItems = useMemo(
     () => (segments ?? []).filter((s) => s.name.trim().toLowerCase() !== "whole trip"),
     [segments],
+  );
+
+  const { bars: segmentBars, laneCount } = useMemo(
+    () =>
+      packSegments(
+        weekItems
+          .filter((s) => s.start_date && s.end_date)
+          .map((s) => ({ id: s.id, name: s.name, start: s.start_date!, end: s.end_date! })),
+      ),
+    [weekItems],
   );
 
   async function save() {
@@ -123,7 +133,13 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
           subtitle="Add lakes with fly-in/out dates, or assign stays, and the trip calendar will fill in here."
         />
       ) : (
-        <TripCalendar weeks={weeks} dayFly={dayFly} onPickDay={setSelectedDay} />
+        <TripCalendar
+          weeks={weeks}
+          dayFly={dayFly}
+          segmentBars={segmentBars}
+          laneCount={laneCount}
+          onPickDay={setSelectedDay}
+        />
       )}
 
       {/* ---- Weeks ---- */}

@@ -139,3 +139,93 @@ export function aggregateFlyEvents(opts: {
   }
   return map;
 }
+
+/* ------------------------------------------------------------------ *
+ * Segment ("week") bars — multi-day events drawn across the calendar.
+ * ------------------------------------------------------------------ */
+
+export type CalSegment = { id: string; name: string; start: string; end: string };
+
+export type SegmentBar = {
+  seg: CalSegment;
+  lane: number;
+  splitStart: boolean; // another segment ends on this one's start day → start at the day's right half
+  splitEnd: boolean; // another segment starts on this one's end day → end at the day's left half
+};
+
+/**
+ * Assign each dated segment to a lane via greedy interval packing, treating a
+ * shared endpoint (one ends the day the next begins) as non-overlapping so
+ * sequential weeks ride the same lane. Flag the shared days so the calendar can
+ * split that day in half rather than stack the two bars.
+ */
+export function packSegments(segments: CalSegment[]): { bars: SegmentBar[]; laneCount: number } {
+  const segs = segments
+    .filter((s) => s.start && s.end)
+    .slice()
+    .sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : a.end < b.end ? -1 : a.end > b.end ? 1 : 0));
+
+  const startDays = new Set(segs.map((s) => s.start));
+  const endDays = new Set(segs.map((s) => s.end));
+
+  const laneEnds: string[] = []; // last end date placed on each lane
+  const bars: SegmentBar[] = [];
+  for (const seg of segs) {
+    // Reuse the first lane whose last segment ends on/before this one starts —
+    // touching endpoints are allowed to share a lane (they split the shared day).
+    let lane = laneEnds.findIndex((end) => end <= seg.start);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(seg.end);
+    } else {
+      laneEnds[lane] = seg.end;
+    }
+    bars.push({
+      seg,
+      lane,
+      splitStart: endDays.has(seg.start),
+      splitEnd: startDays.has(seg.end),
+    });
+  }
+  return { bars, laneCount: laneEnds.length };
+}
+
+export type PlacedBar = {
+  id: string;
+  name: string;
+  lane: number;
+  leftPct: number;
+  widthPct: number;
+  roundLeft: boolean; // the segment's real start falls in this week
+  roundRight: boolean; // the segment's real end falls in this week
+};
+
+/** Geometry (percent of week width) for the bars intersecting one Sun–Sat week. */
+export function placeSegments(bars: SegmentBar[], weekIsos: string[]): PlacedBar[] {
+  const wStart = weekIsos[0];
+  const wEnd = weekIsos[6];
+  const out: PlacedBar[] = [];
+  for (const bar of bars) {
+    const { start, end } = bar.seg;
+    if (end < wStart || start > wEnd) continue;
+    const clipStart = start < wStart ? wStart : start;
+    const clipEnd = end > wEnd ? wEnd : end;
+    const startIdx = weekIsos.indexOf(clipStart);
+    const endIdx = weekIsos.indexOf(clipEnd);
+    if (startIdx === -1 || endIdx === -1) continue;
+    const realStart = clipStart === start;
+    const realEnd = clipEnd === end;
+    const left = ((startIdx + (realStart && bar.splitStart ? 0.5 : 0)) / 7) * 100;
+    const right = ((endIdx + 1 - (realEnd && bar.splitEnd ? 0.5 : 0)) / 7) * 100;
+    out.push({
+      id: bar.seg.id,
+      name: bar.seg.name,
+      lane: bar.lane,
+      leftPct: left,
+      widthPct: right - left,
+      roundLeft: realStart,
+      roundRight: realEnd,
+    });
+  }
+  return out;
+}
