@@ -1,6 +1,6 @@
 "use client";
 
-import { PlaneLanding, PlaneTakeoff, X } from "lucide-react";
+import { Plane, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
 import { Avatar, Card } from "@/components/ui";
 import { parseISO, type Day, type DayFly, type Member } from "@/lib/calendar";
 
@@ -80,6 +80,13 @@ function DayCell({
   const hasOut = !!fly && fly.out.length > 0;
   const tripIn = !!fly && fly.inTripLakes.length > 0;
   const tripOut = !!fly && fly.outTripLakes.length > 0;
+  const showIn = hasIn || tripIn;
+  const showOut = hasOut || tripOut;
+  // A fly-in and fly-out on the same day is one plane event — the outbound
+  // group rides out on the plane that brought the inbound group. Merge them.
+  const kind = showIn && showOut ? "both" : showIn ? "in" : showOut ? "out" : null;
+  const clickable = hasIn || hasOut;
+  const count = (hasIn ? fly!.in.length : 0) + (hasOut ? fly!.out.length : 0);
 
   return (
     <div
@@ -98,12 +105,7 @@ function DayCell({
         {day.isFirstOfMonth ? `${day.monthLabel} ${day.dayNum}` : day.dayNum}
       </div>
 
-      {(hasIn || tripIn) && (
-        <FlyChip kind="in" count={hasIn ? fly!.in.length : 0} clickable={hasIn} onClick={() => onPick(day.iso)} />
-      )}
-      {(hasOut || tripOut) && (
-        <FlyChip kind="out" count={hasOut ? fly!.out.length : 0} clickable={hasOut} onClick={() => onPick(day.iso)} />
-      )}
+      {kind && <FlyChip kind={kind} count={count} clickable={clickable} onClick={() => onPick(day.iso)} />}
     </div>
   );
 }
@@ -114,14 +116,13 @@ function FlyChip({
   clickable,
   onClick,
 }: {
-  kind: "in" | "out";
+  kind: "in" | "out" | "both";
   count: number;
   clickable: boolean;
   onClick: () => void;
 }) {
-  const isIn = kind === "in";
-  const Icon = isIn ? PlaneLanding : PlaneTakeoff;
-  const label = isIn ? "Fly in" : "Fly out";
+  const Icon = kind === "in" ? PlaneLanding : kind === "out" ? PlaneTakeoff : Plane;
+  const label = kind === "in" ? "Fly in" : kind === "out" ? "Fly out" : "Fly in/out";
   const style = clickable
     ? { background: "var(--accent-100)", color: "var(--accent-600)", border: "1px solid transparent" }
     : { background: "var(--surface-2)", color: "var(--text-3)", border: "1px dashed var(--border-strong)" };
