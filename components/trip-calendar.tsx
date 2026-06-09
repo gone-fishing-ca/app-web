@@ -2,7 +2,9 @@
 
 import { Plane, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
 import { Avatar, Card } from "@/components/ui";
+import { KIND_META } from "@/components/itinerary-kit";
 import { placeSegments, parseISO, type Day, type DayFly, type Member, type SegmentBar } from "@/lib/calendar";
+import type { ItineraryItem } from "@/lib/api";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -28,15 +30,19 @@ function initials(name: string): string {
 export function TripCalendar({
   weeks,
   dayFly,
+  dayItems,
   segmentBars,
   laneCount,
   onPickDay,
+  onPickItem,
 }: {
   weeks: Day[][];
   dayFly: Map<string, DayFly>;
+  dayItems: Map<string, ItineraryItem[]>;
   segmentBars: SegmentBar[];
   laneCount: number;
   onPickDay: (iso: string) => void;
+  onPickItem: (item: ItineraryItem) => void;
 }) {
   const bandH = laneCount > 0 ? laneCount * LANE_H + (laneCount - 1) * LANE_GAP : 0;
   const reserveTop = DAY_NUM_H + (bandH > 0 ? bandH + 6 : 0);
@@ -68,11 +74,13 @@ export function TripCalendar({
                   key={day.iso}
                   day={day}
                   fly={dayFly.get(day.iso)}
+                  items={dayItems.get(day.iso)}
                   topBorder={wi > 0}
                   leftBorder={ci > 0}
                   reserveTop={reserveTop}
                   minH={cellMinH}
                   onPick={onPickDay}
+                  onPickItem={onPickItem}
                 />
               ))}
             </div>
@@ -122,19 +130,23 @@ function SegmentChip({ bar }: { bar: ReturnType<typeof placeSegments>[number] })
 function DayCell({
   day,
   fly,
+  items,
   topBorder,
   leftBorder,
   reserveTop,
   minH,
   onPick,
+  onPickItem,
 }: {
   day: Day;
   fly?: DayFly;
+  items?: ItineraryItem[];
   topBorder: boolean;
   leftBorder: boolean;
   reserveTop: number;
   minH: number;
   onPick: (iso: string) => void;
+  onPickItem: (item: ItineraryItem) => void;
 }) {
   const hasIn = !!fly && fly.in.length > 0;
   const hasOut = !!fly && fly.out.length > 0;
@@ -169,9 +181,27 @@ function DayCell({
       {reserveTop > DAY_NUM_H && <div aria-hidden style={{ height: reserveTop - DAY_NUM_H }} />}
 
       <div className="flex flex-col gap-1">
+        {items?.map((it) => (
+          <ItemChip key={it.id} item={it} onClick={() => onPickItem(it)} />
+        ))}
         {kind && <FlyChip kind={kind} count={count} clickable={clickable} onClick={() => onPick(day.iso)} />}
       </div>
     </div>
+  );
+}
+
+function ItemChip({ item, onClick }: { item: ItineraryItem; onClick: () => void }) {
+  const m = KIND_META[item.kind];
+  return (
+    <button
+      onClick={onClick}
+      title={item.title}
+      className="flex w-full items-center gap-1 rounded-[7px] px-1.5 py-1 text-left text-[11px] font-semibold transition hover:brightness-95"
+      style={{ background: m.bg, color: m.fg, border: "1px solid transparent" }}
+    >
+      <m.Icon size={12} strokeWidth={2.2} className="flex-none" />
+      <span className="truncate">{item.title}</span>
+    </button>
   );
 }
 

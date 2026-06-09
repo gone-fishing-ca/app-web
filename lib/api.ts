@@ -151,6 +151,26 @@ export type Stay = {
   end_date: string | null;
   notes: string | null;
 };
+/** A key date on the trip itinerary, shown on the Schedule calendar. `kind`
+ *  discriminates; per-kind fields are surfaced selectively in the editor.
+ *  Linked to one or more participants. Mirrors ItineraryItemOut (api/schemas.py). */
+export type ItineraryKind = "event" | "drive" | "hotel" | "flight";
+export type ItineraryItem = {
+  id: string;
+  trip_id: string;
+  kind: ItineraryKind;
+  title: string;
+  item_date: string; // "YYYY-MM-DD"
+  start_time: string | null; // "HH:MM" (flight: departure)
+  end_time: string | null; //   (flight: arrival)
+  location: string | null; // event venue / hotel / drive start / flight origin
+  end_location: string | null; // drive destination / flight destination
+  description: string | null;
+  confirmation_code: string | null; // flight booking ref
+  sort_order: number;
+  participant_ids: string[];
+};
+
 export type PackItem = {
   id: string;
   trip_id: string;

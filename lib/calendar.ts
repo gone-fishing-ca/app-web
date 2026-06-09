@@ -1,5 +1,5 @@
 import { deriveSpan } from "./format";
-import type { Participant, Stay, TripLake } from "./api";
+import type { ItineraryItem, ItineraryKind, Participant, Stay, TripLake } from "./api";
 
 /* ------------------------------------------------------------------ *
  * Timezone-safe date helpers.
@@ -40,6 +40,7 @@ export type Day = {
 export function scheduleRange(
   stays: Stay[],
   tripLakes: TripLake[],
+  extraDates: string[] = [],
 ): { spanStart: string | null; spanEnd: string | null; gridStart: string | null; gridEnd: string | null } {
   let [spanStart, spanEnd] = deriveSpan(stays);
   if (!spanStart && !spanEnd) {
@@ -49,9 +50,12 @@ export function scheduleRange(
   }
   let gridStart = spanStart;
   let gridEnd = spanEnd;
+  // Widen the grid to show every marker — stay/fly dates plus any itinerary
+  // items (e.g. pre-trip travel days that fall before the fishing window).
   const all = [
     ...stays.flatMap((s) => [s.start_date, s.end_date]),
     ...tripLakes.flatMap((tl) => [tl.fly_in_date, tl.fly_out_date]),
+    ...extraDates,
   ].filter((d): d is string => Boolean(d));
   for (const d of all) {
     if (gridStart === null || d < gridStart) gridStart = d;
@@ -199,6 +203,34 @@ export type PlacedBar = {
   roundLeft: boolean; // the segment's real start falls in this week
   roundRight: boolean; // the segment's real end falls in this week
 };
+
+/* ------------------------------------------------------------------ *
+ * Itinerary items (event / drive / hotel / flight) keyed by day.
+ * ------------------------------------------------------------------ */
+
+// Display order within a day: drives first, then events, hotels, flights.
+const KIND_ORDER: Record<ItineraryKind, number> = { drive: 0, event: 1, hotel: 2, flight: 3 };
+
+/** Group itinerary items by their day, each day's list sorted by kind, then
+ *  start time, then sort_order. Hotels are single-day (item_date = check-in),
+ *  so they naturally show only on that day. */
+export function aggregateItinerary(items: ItineraryItem[]): Map<string, ItineraryItem[]> {
+  const map = new Map<string, ItineraryItem[]>();
+  for (const it of items) {
+    const list = map.get(it.item_date);
+    if (list) list.push(it);
+    else map.set(it.item_date, [it]);
+  }
+  for (const list of map.values()) {
+    list.sort(
+      (a, b) =>
+        KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
+        (a.start_time ?? "").localeCompare(b.start_time ?? "") ||
+        a.sort_order - b.sort_order,
+    );
+  }
+  return map;
+}
 
 /** Geometry (percent of week width) for the bars intersecting one Sun–Sat week. */
 export function placeSegments(bars: SegmentBar[], weekIsos: string[]): PlacedBar[] {

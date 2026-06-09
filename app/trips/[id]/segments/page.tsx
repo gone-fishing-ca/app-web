@@ -4,9 +4,22 @@ import { use, useEffect, useMemo, useState } from "react";
 import { CalendarRange, MapPinned, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Btn, Card, EmptyState, Field, SectionTitle } from "@/components/ui";
 import { TripCalendar, DayDetailModal } from "@/components/trip-calendar";
-import { api, type Participant, type Segment, type Stay, type TripLake } from "@/lib/api";
+import { AddMenu } from "@/components/add-menu";
+import { ItineraryItemEditor } from "@/components/itinerary-editor";
+import {
+  api,
+  type ItineraryItem,
+  type ItineraryKind,
+  type Participant,
+  type Segment,
+  type Stay,
+  type TripLake,
+} from "@/lib/api";
 import { fmtRange } from "@/lib/format";
-import { aggregateFlyEvents, buildWeeks, packSegments, scheduleRange } from "@/lib/calendar";
+import { aggregateFlyEvents, aggregateItinerary, buildWeeks, packSegments, scheduleRange } from "@/lib/calendar";
+
+// Editor target: creating a new item of a kind, or editing an existing one.
+type EditorState = { mode: "create"; kind: ItineraryKind } | { mode: "edit"; item: ItineraryItem };
 
 type Draft = { id?: string; name: string; start_date: string; end_date: string };
 const EMPTY: Draft = { name: "", start_date: "", end_date: "" };
@@ -22,7 +35,9 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   const [stays, setStays] = useState<Stay[]>([]);
   const [tripLakes, setTripLakes] = useState<TripLake[]>([]);
   const [segments, setSegments] = useState<Segment[] | null>(null);
+  const [items, setItems] = useState<ItineraryItem[]>([]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [editor, setEditor] = useState<EditorState | null>(null);
 
   // Week management (carried over from the old segments page).
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -35,19 +50,23 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
       api.get<Stay[]>(`/trips/${tripId}/stays`),
       api.get<TripLake[]>(`/trips/${tripId}/lakes`),
       api.get<Segment[]>(`/trips/${tripId}/segments`),
+      api.get<ItineraryItem[]>(`/trips/${tripId}/itinerary`),
     ])
-      .then(([p, s, l, seg]) => {
+      .then(([p, s, l, seg, it]) => {
         setParticipants(p);
         setStays(s);
         setTripLakes(l);
         setSegments(seg);
+        setItems(it);
       })
       .catch((e) => setError(msg(e, "Load failed")));
   }, [tripId]);
 
+  const dayItems = useMemo(() => aggregateItinerary(items), [items]);
+
   const { spanStart, spanEnd, gridStart, gridEnd } = useMemo(
-    () => scheduleRange(stays, tripLakes),
-    [stays, tripLakes],
+    () => scheduleRange(stays, tripLakes, items.map((it) => it.item_date)),
+    [stays, tripLakes, items],
   );
   const weeks = useMemo(
     () => (gridStart && gridEnd ? buildWeeks(gridStart, gridEnd, spanStart, spanEnd) : []),
@@ -110,9 +129,24 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
 
   const selectedFly = selectedDay ? dayFly.get(selectedDay) : undefined;
 
+  function onItemSaved(saved: ItineraryItem) {
+    setItems((prev) => {
+      const i = prev.findIndex((it) => it.id === saved.id);
+      if (i === -1) return [...prev, saved];
+      const next = prev.slice();
+      next[i] = saved;
+      return next;
+    });
+  }
+  function onItemDeleted(id: string) {
+    setItems((prev) => prev.filter((it) => it.id !== id));
+  }
+
   return (
     <div className="p-7 max-w-[980px] mx-auto">
-      <SectionTitle>Schedule</SectionTitle>
+      <SectionTitle right={<AddMenu onPick={(kind) => setEditor({ mode: "create", kind })} />}>
+        Schedule
+      </SectionTitle>
 
       {error && (
         <div
@@ -130,15 +164,17 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         <EmptyState
           icon={CalendarRange}
           title="No dates yet"
-          subtitle="Add lakes with fly-in/out dates, or assign stays, and the trip calendar will fill in here."
+          subtitle="Add lakes with fly-in/out dates, assign stays, or add an itinerary item, and the trip calendar will fill in here."
         />
       ) : (
         <TripCalendar
           weeks={weeks}
           dayFly={dayFly}
+          dayItems={dayItems}
           segmentBars={segmentBars}
           laneCount={laneCount}
           onPickDay={setSelectedDay}
+          onPickItem={(item) => setEditor({ mode: "edit", item })}
         />
       )}
 
@@ -242,6 +278,18 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
 
       {selectedDay && selectedFly && (
         <DayDetailModal iso={selectedDay} fly={selectedFly} onClose={() => setSelectedDay(null)} />
+      )}
+
+      {editor && (
+        <ItineraryItemEditor
+          tripId={tripId}
+          kind={editor.mode === "create" ? editor.kind : editor.item.kind}
+          item={editor.mode === "edit" ? editor.item : null}
+          participants={participants}
+          onSaved={onItemSaved}
+          onDeleted={onItemDeleted}
+          onClose={() => setEditor(null)}
+        />
       )}
     </div>
   );
