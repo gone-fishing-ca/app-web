@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
-import { Btn, Field } from "@/components/ui";
+import { Btn, Field, ModalShell } from "@/components/ui";
 import { api, type TripLake, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
 
@@ -88,25 +87,19 @@ export function StayEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4"
-      style={{ background: "rgba(0,0,0,.45)" }} onClick={onClose}>
-      <div className="w-full max-w-[520px] rounded-2xl"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
-        onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div>
-            <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
-              {stay ? "Edit lake & dates" : "Add lake & dates"}
-            </div>
-            {participantName && <div className="text-[12.5px]" style={{ color: "var(--text-3)" }}>{participantName}</div>}
-          </div>
-          <button onClick={onClose} className="grid place-items-center"
-            style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
-            <X size={15} />
-          </button>
-        </div>
-
-        <div className="px-5 py-4 flex flex-col gap-4">
+    <ModalShell
+      title={stay ? "Edit lake & dates" : "Add lake & dates"}
+      subtitle={participantName}
+      onClose={onClose}
+      footer={
+        <>
+          {stay && onDeleted && <Btn kind="danger" className="mr-auto" onClick={del} disabled={busy}>Remove</Btn>}
+          <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn kind="accent" onClick={save} disabled={busy || !lakeId}>{busy ? "Saving…" : stay ? "Save" : "Add"}</Btn>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
           {/* Lake */}
           <label className="flex flex-col gap-1.5">
             <span className="text-[12.5px] font-semibold" style={{ color: "var(--text-2)" }}>Lake</span>
@@ -173,17 +166,8 @@ export function StayEditor({
           {error && (
             <div className="rounded-[10px] px-3 py-2.5 text-[13px]" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
           )}
-        </div>
-
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <div>{stay && onDeleted && <Btn kind="danger" onClick={del} disabled={busy}>Remove</Btn>}</div>
-          <div className="flex gap-2">
-            <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
-            <Btn kind="accent" onClick={save} disabled={busy || !lakeId}>{busy ? "Saving…" : stay ? "Save" : "Add"}</Btn>
-          </div>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

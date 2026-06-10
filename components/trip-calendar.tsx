@@ -1,7 +1,7 @@
 "use client";
 
-import { Plane, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
-import { Avatar, Card, initialsOf } from "@/components/ui";
+import { Plane, PlaneLanding, PlaneTakeoff } from "lucide-react";
+import { Avatar, Card, ModalShell, initialsOf } from "@/components/ui";
 import { KIND_META } from "@/components/itinerary-kit";
 import { placeSegments, parseISO, type Day, type DayFly, type Member, type SegmentBar } from "@/lib/calendar";
 import type { ItineraryItem } from "@/lib/api";
@@ -47,10 +47,12 @@ export function TripCalendar({
         {WEEKDAYS.map((w) => (
           <div
             key={w}
-            className="px-3 py-2.5 text-[11.5px] font-bold uppercase"
+            className="px-1.5 sm:px-3 py-2.5 text-[11.5px] font-bold uppercase"
             style={{ letterSpacing: ".05em", color: "var(--text-3)" }}
           >
-            {w}
+            {/* Single-letter weekdays on phones — the columns are too narrow for more. */}
+            <span className="sm:hidden">{w[0]}</span>
+            <span className="hidden sm:inline">{w}</span>
           </div>
         ))}
       </div>
@@ -154,13 +156,13 @@ function DayCell({
 
   return (
     <div
-      className="flex flex-col px-1.5 pb-2"
+      className="flex flex-col px-1 sm:px-1.5 pb-2 min-h-[84px] sm:min-h-[var(--cell-h)]"
       style={{
-        minHeight: minH,
+        "--cell-h": `${minH}px`,
         borderTop: topBorder ? "1px solid var(--border)" : undefined,
         borderLeft: leftBorder ? "1px solid var(--border)" : undefined,
         background: day.inSpan ? "var(--surface)" : "var(--surface-2)",
-      }}
+      } as React.CSSProperties}
     >
       <div
         className="flex items-center px-1 text-[12px] font-semibold"
@@ -242,35 +244,12 @@ export function DayDetailModal({ iso, fly, onClose }: { iso: string; fly: DayFly
     year: "numeric",
   });
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center p-4"
-      style={{ background: "rgba(0,0,0,.45)" }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-[460px] rounded-2xl"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
-            {heading}
-          </div>
-          <button
-            onClick={onClose}
-            title="Close"
-            className="grid place-items-center"
-            style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div className="flex flex-col gap-5 px-5 py-4">
-          <FlyGroup kind="in" members={fly.in} tripLakes={fly.inTripLakes} />
-          <FlyGroup kind="out" members={fly.out} tripLakes={fly.outTripLakes} />
-        </div>
+    <ModalShell title={heading} maxWidth={460} onClose={onClose}>
+      <div className="flex flex-col gap-5">
+        <FlyGroup kind="in" members={fly.in} tripLakes={fly.inTripLakes} />
+        <FlyGroup kind="out" members={fly.out} tripLakes={fly.outTripLakes} />
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

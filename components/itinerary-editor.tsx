@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
-import { Btn, ComboBox, Field } from "@/components/ui";
+import { Btn, ComboBox, Field, ModalShell } from "@/components/ui";
 import { KIND_META } from "@/components/itinerary-kit";
 import { FlightLegEditor } from "@/components/flight-leg-editor";
 import { api, type FlightLeg, type ItineraryItem, type ItineraryKind, type Participant } from "@/lib/api";
@@ -55,7 +55,10 @@ export function ItineraryItemEditor({
     endTime: effKind === "event",
   };
   const timeCols = (show.startTime ? 1 : 0) + (show.endTime ? 1 : 0);
-  const dateRowCols = timeCols === 2 ? "1.4fr 1fr 1fr" : timeCols === 1 ? "1.4fr 1fr" : "1fr";
+  // With two time fields the date drops to its own row on phones.
+  const dateRowCols = timeCols === 2
+    ? "grid-cols-2 sm:[grid-template-columns:1.4fr_1fr_1fr]"
+    : timeCols === 1 ? "[grid-template-columns:1.4fr_1fr]" : "grid-cols-1";
   const labels = LABELS[effKind];
 
   // Per-person flight legs under an existing flight item.
@@ -126,39 +129,39 @@ export function ItineraryItemEditor({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center p-4"
-      style={{ background: "rgba(0,0,0,.45)" }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-[480px] rounded-2xl"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div className="flex items-center gap-2.5">
-            <span
-              className="grid place-items-center rounded-[8px]"
-              style={{ width: 28, height: 28, background: meta.bg, color: meta.fg }}
-            >
-              <meta.Icon size={16} strokeWidth={2.2} />
-            </span>
-            <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
-              {item ? "Edit" : "Add"} {meta.label.toLowerCase()}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            title="Close"
-            className="grid place-items-center"
-            style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
+    <ModalShell
+      maxWidth={480}
+      onClose={onClose}
+      header={
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="grid flex-none place-items-center rounded-[8px]"
+            style={{ width: 28, height: 28, background: meta.bg, color: meta.fg }}
           >
-            <X size={16} />
-          </button>
+            <meta.Icon size={16} strokeWidth={2.2} />
+          </span>
+          <div className="truncate text-[15px] font-semibold" style={{ color: "var(--text)" }}>
+            {item ? "Edit" : "Add"} {meta.label.toLowerCase()}
+          </div>
         </div>
-
-        <div className="flex flex-col gap-3.5 px-5 py-4">
+      }
+      footer={
+        <>
+          {item && onDeleted && (
+            <Btn kind="ghost" className="mr-auto" onClick={del} disabled={busy}>
+              Delete
+            </Btn>
+          )}
+          <Btn kind="ghost" onClick={onClose}>
+            Cancel
+          </Btn>
+          <Btn kind="accent" onClick={save} disabled={busy || !canSave}>
+            {busy ? "Saving…" : item ? "Save changes" : "Add"}
+          </Btn>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3.5">
           {error && (
             <div className="rounded-[10px] px-3 py-2.5 text-[13px]" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>
               {error}
@@ -167,8 +170,10 @@ export function ItineraryItemEditor({
 
           <Field label={labels.title} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={labels.titlePlaceholder} />
 
-          <div className="grid gap-3" style={{ gridTemplateColumns: dateRowCols }}>
-            <Field label="Date" type="date" value={itemDate} onChange={(e) => setItemDate(e.target.value)} />
+          <div className={`grid gap-3 ${dateRowCols}`}>
+            <div className={timeCols === 2 ? "col-span-2 sm:col-span-1" : undefined}>
+              <Field label="Date" type="date" value={itemDate} onChange={(e) => setItemDate(e.target.value)} />
+            </div>
             {show.startTime && (
               <Field label={labels.startTime} type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             )}
@@ -178,7 +183,7 @@ export function ItineraryItemEditor({
           </div>
 
           {show.endLocation ? (
-            <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label={labels.location} value={location} onChange={(e) => setLocation(e.target.value)} placeholder={labels.locationPlaceholder} />
               <Field label={labels.endLocation} value={endLocation} onChange={(e) => setEndLocation(e.target.value)} placeholder={labels.endLocationPlaceholder} />
             </div>
@@ -251,40 +256,21 @@ export function ItineraryItemEditor({
           </label>
         </div>
 
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <div>
-            {item && onDeleted && (
-              <Btn kind="ghost" onClick={del} disabled={busy}>
-                Delete
-              </Btn>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Btn kind="ghost" onClick={onClose}>
-              Cancel
-            </Btn>
-            <Btn kind="accent" onClick={save} disabled={busy || !canSave}>
-              {busy ? "Saving…" : item ? "Save changes" : "Add"}
-            </Btn>
-          </div>
-        </div>
-
-        {/* Inside the stopPropagation panel so the leg editor's backdrop clicks
-            don't bubble out and close this modal too. */}
-        {legEditor && item && (
-          <FlightLegEditor
-            tripId={tripId}
-            participants={participants}
-            flightItems={[item]}
-            lockedItemId={item.id}
-            leg={legEditor === "new" ? null : legEditor}
-            onSaved={onLegSaved}
-            onDeleted={(id) => setLegs((prev) => prev.filter((l) => l.id !== id))}
-            onClose={() => setLegEditor(null)}
-          />
-        )}
-      </div>
-    </div>
+      {/* Inside the stopPropagation panel so the leg editor's backdrop clicks
+          don't bubble out and close this modal too. */}
+      {legEditor && item && (
+        <FlightLegEditor
+          tripId={tripId}
+          participants={participants}
+          flightItems={[item]}
+          lockedItemId={item.id}
+          leg={legEditor === "new" ? null : legEditor}
+          onSaved={onLegSaved}
+          onDeleted={(id) => setLegs((prev) => prev.filter((l) => l.id !== id))}
+          onClose={() => setLegEditor(null)}
+        />
+      )}
+    </ModalShell>
   );
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { CalendarRange, X } from "lucide-react";
-import { Btn, EmptyState, Field, SectionTitle } from "@/components/ui";
+import { CalendarRange } from "lucide-react";
+import { Btn, EmptyState, Field, ModalShell, SectionTitle } from "@/components/ui";
 import { TripCalendar, DayDetailModal } from "@/components/trip-calendar";
 import { AddMenu } from "@/components/add-menu";
 import { ItineraryItemEditor } from "@/components/itinerary-editor";
@@ -151,7 +151,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="p-7 max-w-[1240px] mx-auto">
+    <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
       <SectionTitle
         right={
           <AddMenu
@@ -196,63 +196,40 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
       )}
 
       {draft && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center p-4"
-          style={{ background: "rgba(0,0,0,.45)" }}
-          onClick={() => setDraft(null)}
-        >
-          <div
-            className="w-full max-w-[460px] rounded-2xl"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-              <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
-                {draft.id ? "Edit week" : "New week"}
-              </div>
-              <button
-                onClick={() => setDraft(null)}
-                title="Close"
-                className="grid place-items-center"
-                style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="px-5 py-4">
-              {error && (
-                <div
-                  className="mb-3 rounded-[10px] px-3 py-2.5 text-[13px]"
-                  style={{ background: "var(--danger-bg)", color: "var(--danger)" }}
-                >
-                  {error}
-                </div>
+        <ModalShell
+          title={draft.id ? "Edit week" : "New week"}
+          onClose={() => setDraft(null)}
+          maxWidth={460}
+          footer={
+            <>
+              {draft.id && (
+                <Btn kind="ghost" className="mr-auto" onClick={() => remove(draft.id!)} disabled={busy}>Delete</Btn>
               )}
-              <div className="flex flex-col gap-3">
-                <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Week 1" />
-                <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                  <Field label="Start" type="date" value={draft.start_date} onChange={(e) => setDraft({ ...draft, start_date: e.target.value })} />
-                  <Field label="End" type="date" value={draft.end_date} onChange={(e) => setDraft({ ...draft, end_date: e.target.value })} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between mt-5">
-                <div>
-                  {draft.id && (
-                    <Btn kind="ghost" onClick={() => remove(draft.id!)} disabled={busy}>Delete</Btn>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Btn kind="ghost" onClick={() => setDraft(null)}>Cancel</Btn>
-                  {/* Dates are required — the calendar is the only place weeks show,
-                      and an undated week would be invisible and unreachable. */}
-                  <Btn kind="accent" onClick={save} disabled={busy || !draft.name.trim() || !draft.start_date || !draft.end_date}>
-                    {busy ? "Saving…" : draft.id ? "Save changes" : "Add"}
-                  </Btn>
-                </div>
-              </div>
+              <Btn kind="ghost" onClick={() => setDraft(null)}>Cancel</Btn>
+              {/* Dates are required — the calendar is the only place weeks show,
+                  and an undated week would be invisible and unreachable. */}
+              <Btn kind="accent" onClick={save} disabled={busy || !draft.name.trim() || !draft.start_date || !draft.end_date}>
+                {busy ? "Saving…" : draft.id ? "Save changes" : "Add"}
+              </Btn>
+            </>
+          }
+        >
+          {error && (
+            <div
+              className="mb-3 rounded-[10px] px-3 py-2.5 text-[13px]"
+              style={{ background: "var(--danger-bg)", color: "var(--danger)" }}
+            >
+              {error}
+            </div>
+          )}
+          <div className="flex flex-col gap-3">
+            <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Week 1" />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Start" type="date" value={draft.start_date} onChange={(e) => setDraft({ ...draft, start_date: e.target.value })} />
+              <Field label="End" type="date" value={draft.end_date} onChange={(e) => setDraft({ ...draft, end_date: e.target.value })} />
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {selectedDay && selectedFly && (

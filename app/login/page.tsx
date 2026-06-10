@@ -50,7 +50,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="grid place-items-center min-h-screen" style={{ background: "var(--bg-sunk)" }}>
+    <div className="grid place-items-center min-h-dvh p-4 py-8" style={{ background: "var(--bg-sunk)" }}>
       <div className="w-full max-w-[400px] flex flex-col gap-5">
         <div className="text-center flex flex-col items-center gap-3">
           <img src="/walleye/walleye-icon.png" alt="" style={{ width: 72, height: 72, borderRadius: 18 }} />

@@ -81,7 +81,7 @@ export default function FlightsPage({ params }: { params: Promise<{ id: string }
   }
 
   return (
-    <div className="p-7 max-w-[1240px] mx-auto">
+    <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
       <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={() => setItemEditor("new")}>Add flight</Btn>}>
         Flight tracker
       </SectionTitle>
@@ -110,7 +110,7 @@ export default function FlightsPage({ params }: { params: Promise<{ id: string }
             const itemLegs = legsByItem.get(it.id) ?? [];
             return (
               <Card key={it.id} pad={0}>
-                <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
+                <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
                   <span
                     className="grid place-items-center rounded-[8px] flex-none"
                     style={{ width: 30, height: 30, background: "var(--success-bg)", color: "var(--success)" }}
@@ -146,13 +146,13 @@ export default function FlightsPage({ params }: { params: Promise<{ id: string }
                       key={l.id}
                       type="button"
                       onClick={() => setLegEditor({ leg: l })}
-                      className="flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13.5px]"
+                      className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 px-4 sm:px-5 py-2.5 text-left text-[13.5px] sm:flex-nowrap"
                       style={{ color: "var(--text)", borderTop: i ? "1px solid var(--border)" : "none" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <span className="min-w-0 w-[160px] truncate font-semibold">{pName.get(l.participant_id) ?? "Unknown"}</span>
-                      <span className="gf-mono w-[72px] flex-none text-[12.5px]" style={{ color: "var(--text-2)" }}>
+                      <span className="min-w-0 w-full sm:w-[160px] truncate font-semibold">{pName.get(l.participant_id) ?? "Unknown"}</span>
+                      <span className="gf-mono sm:w-[72px] flex-none text-[12.5px]" style={{ color: "var(--text-2)" }}>
                         {l.flight_number ?? "—"}
                       </span>
                       <span className="flex-none text-[13px]" style={{ color: "var(--text-2)" }}>

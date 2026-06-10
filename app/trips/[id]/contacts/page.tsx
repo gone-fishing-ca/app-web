@@ -2,10 +2,10 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import {
-  ContactRound, Globe, Mail, MapPin, Pencil, Phone, Plus, Tent, Trash2, Users, X,
+  ContactRound, Globe, Mail, MapPin, Pencil, Phone, Plus, Tent, Trash2, Users,
 } from "lucide-react";
 import {
-  Avatar, Badge, Btn, Card, ComboBox, EmptyState, Field, SectionTitle, initialsOf,
+  Avatar, Badge, Btn, Card, ComboBox, EmptyState, Field, ModalShell, SectionTitle, initialsOf,
 } from "@/components/ui";
 import {
   api, type Contact, type ContactGroup, type Outfitter, type Resource,
@@ -13,7 +13,8 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-const GROUP_COLS = "1.5fr 1fr 1fr 1.6fr 76px";
+// Desktop table columns; below lg the rows wrap into stacked card-style rows.
+const GROUP_COLS = "lg:[grid-template-columns:1.5fr_1fr_1fr_1.6fr_76px]";
 
 type ContactDraft = {
   id?: string;
@@ -111,7 +112,7 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="p-7 max-w-[1240px] mx-auto">
+    <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
       <SectionTitle>Contacts</SectionTitle>
 
       {error && (
@@ -128,8 +129,8 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
           subtitle="People you add on the Group page show up here, along with their spouses and emergency contacts." />
       ) : (
         <Card pad={0} className="mb-8">
-          <div className="grid items-center px-5 py-3 text-[11.5px] font-bold uppercase"
-            style={{ gridTemplateColumns: GROUP_COLS, letterSpacing: ".05em", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
+          <div className={`hidden lg:grid items-center px-5 py-3 text-[11.5px] font-bold uppercase ${GROUP_COLS}`}
+            style={{ letterSpacing: ".05em", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
             <span>Name</span><span>Cell</span><span>Home</span><span>Email</span><span></span>
           </div>
           {groups.map((g, i) => (
@@ -161,7 +162,7 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
         <EmptyState icon={Tent} title="No outfitters yet"
           subtitle="Outfitters from the lakes on this trip show up here automatically. Add a lake with an outfitter on the Lakes & cabins page." />
       ) : (
-        <div className="grid gap-3 mb-8" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+        <div className="grid gap-3 mb-8" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
           {outfitters.map(({ outfitter: o, lakes: runs }) => (
             <Card key={o.id} pad={18}>
               <div className="flex items-center gap-2">
@@ -194,11 +195,11 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
       )}
 
       {/* ---- Other resources ---------------------------------------------------- */}
-      <div className="flex items-end justify-between gap-2 mb-3">
+      <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
         <Eyebrow icon={MapPin} noMargin>Other resources</Eyebrow>
-        <div className="flex items-end gap-2">
+        <div className="flex w-full sm:w-auto flex-col sm:flex-row sm:items-end gap-2">
           {unlinked.length > 0 && (
-            <div className="w-[300px]">
+            <div className="w-full sm:w-[300px]">
               <ComboBox
                 value={null}
                 placeholder="Add from your catalog…"
@@ -221,7 +222,7 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
           subtitle="The duty-free store, the dry-ice supplier, the bait shop on the way up — link the places this trip leans on."
           action={<Btn kind="accent" icon={Plus} onClick={() => setResourceDraft(blankResource())}>Add a resource</Btn>} />
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
           {tripResources.map((r) => (
             <Card key={r.trip_resource_id} pad={18}>
               <div className="flex items-center gap-2">
@@ -300,9 +301,8 @@ function ContactRow({
 }) {
   return (
     // Relative rows tuck up under their primary: no top padding, slim bottom.
-    <div className={`grid items-center px-5 ${primary ? "py-2.5" : "pt-0 pb-2"}`}
-      style={{ gridTemplateColumns: GROUP_COLS }}>
-      <div className={`flex items-center gap-2.5 min-w-0 ${primary ? "" : "pl-9"}`}>
+    <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 lg:px-5 lg:grid lg:gap-0 ${primary ? "py-2.5" : "pt-0 pb-2"} ${GROUP_COLS}`}>
+      <div className={`order-1 lg:order-none flex items-center gap-2.5 min-w-0 flex-1 ${primary ? "" : "pl-9"}`}>
         {primary && <Avatar initials={initialsOf(c.name, c.email)} src={c.avatar_url} size={28} />}
         <span className={`text-[13.5px] truncate ${primary ? "font-semibold" : ""}`}
           style={{ color: primary ? "var(--text)" : "var(--text-2)" }}>
@@ -310,24 +310,29 @@ function ContactRow({
         </span>
         {!primary && c.relationship_label && <Badge tone="neutral">{c.relationship_label}</Badge>}
       </div>
-      <PhoneCell value={c.cell} />
-      <PhoneCell value={c.home_phone} />
-      <div className="text-[13px] truncate" style={{ color: "var(--text-2)" }}>
+      <PhoneCell value={c.cell} label="cell" className={`order-3 lg:order-none ${primary ? "" : "pl-9 lg:pl-0"}`} />
+      <PhoneCell value={c.home_phone} label="home" className="order-4 lg:order-none" />
+      <div className={`order-5 lg:order-none min-w-0 text-[13px] truncate ${c.email ? "" : "hidden lg:block"} ${primary ? "" : "pl-9 lg:pl-0"} w-full lg:w-auto`}
+        style={{ color: "var(--text-2)" }}>
         {c.email ? <a href={`mailto:${c.email}`} className="hover:underline" style={{ color: "var(--accent-600)" }}>{c.email}</a> : "—"}
       </div>
-      <div className="flex items-center justify-end gap-1">
+      <div className="order-2 lg:order-none flex items-center justify-end gap-1">
         {onAddRelative && <IconBtn title="Add a related contact (spouse, child, …)" onClick={onAddRelative}><Plus size={14} /></IconBtn>}
         <IconBtn title="Edit" onClick={onEdit}><Pencil size={14} /></IconBtn>
         {onDelete && <IconBtn title="Delete" onClick={onDelete}><Trash2 size={14} /></IconBtn>}
       </div>
+      {/* Forces the wrap after the actions, so the zero-basis flex-1 name block
+          actually gets the rest of the first line. */}
+      <span aria-hidden className="order-2 w-full lg:hidden" />
     </div>
   );
 }
 
-function PhoneCell({ value }: { value: string | null }) {
-  if (!value) return <div style={{ color: "var(--text-3)" }}>—</div>;
+function PhoneCell({ value, label, className = "" }: { value: string | null; label: string; className?: string }) {
+  if (!value) return <div className={`hidden lg:block ${className}`} style={{ color: "var(--text-3)" }}>—</div>;
   return (
-    <div className="gf-mono text-[13px]">
+    <div className={`gf-mono text-[13px] ${className}`}>
+      <span className="lg:hidden mr-1 text-[11px] font-bold uppercase" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>{label}</span>
       <a href={`tel:${value}`} className="hover:underline" style={{ color: "var(--text-2)" }}>{value}</a>
     </div>
   );
@@ -381,7 +386,7 @@ function ContactModal({
       }
       error={error}
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Sandy Jacques" />
         {isRelative ? (
           <Field label="Relationship" value={d.relationship_label}
@@ -389,7 +394,7 @@ function ContactModal({
         ) : <div />}
         <Field label="Cell" value={d.cell} onChange={(e) => setD({ ...d, cell: e.target.value })} placeholder="+1 555 555 5555" />
         <Field label="Home" value={d.home_phone} onChange={(e) => setD({ ...d, home_phone: e.target.value })} placeholder="+1 555 555 5555" />
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Field label="Email" type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} placeholder="sandy@example.com" />
         </div>
       </div>
@@ -441,18 +446,18 @@ function OutfitterModal({
       }
       error={error}
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
         <Field label="Contact person" value={d.contact_person} onChange={(e) => setD({ ...d, contact_person: e.target.value })} placeholder="Don & Anette Elliott" />
         <Field label="Phone" value={d.phone} onChange={(e) => setD({ ...d, phone: e.target.value })} />
         <Field label="Email" type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} />
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Field label="Website" value={d.website} onChange={(e) => setD({ ...d, website: e.target.value })} placeholder="https://…" />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Field label="Address" value={d.address} onChange={(e) => setD({ ...d, address: e.target.value })} />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Field label="Notes" value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} />
         </div>
       </div>
@@ -504,20 +509,20 @@ function ResourceModal({
       }
       error={error}
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Rydens Duty Free Store" />
         <Field label="Category" value={d.category} onChange={(e) => setD({ ...d, category: e.target.value })} placeholder="Bait shop · Dry ice · Hotel …" />
         <Field label="Contact person" value={d.contact_person} onChange={(e) => setD({ ...d, contact_person: e.target.value })} placeholder="Mike" />
         <Field label="Phone" value={d.phone} onChange={(e) => setD({ ...d, phone: e.target.value })} />
         <Field label="Alt phone" value={d.alt_phone} onChange={(e) => setD({ ...d, alt_phone: e.target.value })} />
         <Field label="Email" type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} />
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Field label="Website" value={d.website} onChange={(e) => setD({ ...d, website: e.target.value })} placeholder="https://…" />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Field label="Address" value={d.address} onChange={(e) => setD({ ...d, address: e.target.value })} />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Field label="Notes" value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} placeholder="Call 30 mins ahead · red canoe on left …" />
         </div>
       </div>
@@ -537,33 +542,13 @@ function Modal({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4"
-      style={{ background: "rgba(0,0,0,.45)" }} onClick={onClose}>
-      <div className="w-full max-w-[560px] rounded-2xl"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
-        onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div>
-            <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>{title}</div>
-            {subtitle && <div className="text-[12.5px]" style={{ color: "var(--text-3)" }}>{subtitle}</div>}
-          </div>
-          <button onClick={onClose} className="grid place-items-center"
-            style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
-            <X size={15} />
-          </button>
-        </div>
-        <div className="px-5 py-4">
-          {error && (
-            <div className="mb-3 rounded-[10px] px-3 py-2.5 text-[13px]"
-              style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
-          )}
-          {children}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-4" style={{ borderTop: "1px solid var(--border)" }}>
-          {footer}
-        </div>
-      </div>
-    </div>
+    <ModalShell title={title} subtitle={subtitle} footer={footer} onClose={onClose} maxWidth={560}>
+      {error && (
+        <div className="mb-3 rounded-[10px] px-3 py-2.5 text-[13px]"
+          style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
+      )}
+      {children}
+    </ModalShell>
   );
 }
 

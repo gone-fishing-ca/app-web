@@ -66,7 +66,7 @@ export default function TripsPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header
-        className="flex items-center px-8 py-5"
+        className="flex items-center px-4 sm:px-8 py-4 sm:py-5"
         style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}
       >
         <Wordmark size={18} glyph mode="light" />
@@ -75,7 +75,7 @@ export default function TripsPage() {
         </div>
       </header>
 
-      <main className="max-w-[1100px] mx-auto px-8 py-10">
+      <main className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-10">
         <div className="flex items-center justify-between mb-7">
           <Eyebrow>Your trips</Eyebrow>
           <Link href="/trips/new">
@@ -118,7 +118,7 @@ function TripSection({ title, trips }: { title: string; trips: Trip[] }) {
   return (
     <section>
       <SectionTitle>{title}</SectionTitle>
-      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
         {trips.map((t) => <TripCard key={t.id} trip={t} />)}
       </div>
     </section>

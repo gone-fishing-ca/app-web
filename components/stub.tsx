@@ -7,7 +7,7 @@ export function ModuleStub({
   icon, title, blurb,
 }: { icon: LucideIcon; title: string; blurb: string }) {
   return (
-    <div className="p-10">
+    <div className="p-6 sm:p-10">
       <EmptyState
         icon={icon}
         title={title}

@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Check, ChevronDown, type LucideIcon, Plus, Search } from "lucide-react";
+import { Check, ChevronDown, type LucideIcon, Plus, Search, X } from "lucide-react";
 import {
   type ButtonHTMLAttributes,
   type CSSProperties,
@@ -353,10 +353,65 @@ export function ComboBox({
   );
 }
 
+/* ---- Modal shell ----------------------------------------------------------
+   The one true modal wrapper: a bottom sheet on phones (full width, slides up,
+   body scrolls), a centred dialog from `sm` up. `header` replaces the default
+   title/subtitle block when a modal needs richer chrome (icons, etc.); the
+   footer row is justify-end — push a button left with `mr-auto`. */
+export function ModalShell({
+  title, subtitle, header, footer, onClose, children, maxWidth = 520, zIndex = 50,
+}: {
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  header?: ReactNode;
+  footer?: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+  maxWidth?: number;
+  zIndex?: number;
+}) {
+  return (
+    <div
+      className="fixed inset-0 flex items-end justify-center sm:items-center sm:p-4"
+      style={{ background: "rgba(0,0,0,.45)", zIndex }}
+      onClick={onClose}
+    >
+      <div
+        className="gf-sheet flex w-full max-h-[92dvh] flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl"
+        style={{ maxWidth, background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-none items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+          {header ?? (
+            <div className="min-w-0">
+              <div className="truncate text-[15px] font-semibold" style={{ color: "var(--text)" }}>{title}</div>
+              {subtitle && <div className="truncate text-[12.5px]" style={{ color: "var(--text-3)" }}>{subtitle}</div>}
+            </div>
+          )}
+          <button
+            onClick={onClose}
+            title="Close"
+            className="grid flex-none place-items-center"
+            style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
+          >
+            <X size={15} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {footer && (
+          <div className="flex flex-none flex-wrap items-center justify-end gap-2 px-5 py-4" style={{ borderTop: "1px solid var(--border)" }}>
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---- Section title ------------------------------------------------------- */
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <div className="flex items-center justify-between mb-3.5">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3.5">
       <div
         style={{
           fontFamily: "var(--font-display)",

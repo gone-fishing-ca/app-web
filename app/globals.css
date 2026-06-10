@@ -37,6 +37,20 @@ button {
 }
 .gf-fade { animation: gf-fade .25s ease; }
 
+/* Mobile nav drawer slide-in */
+@keyframes gf-drawer {
+  from { transform: translateX(-24px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.gf-drawer { animation: gf-drawer .2s ease; }
+
+/* Modal panel: rises like a sheet on small screens, fades in on larger ones */
+@keyframes gf-sheet {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.gf-sheet { animation: gf-sheet .22s ease; }
+
 /* Mono numbers should be tabular */
 .font-mono, .gf-mono {
   font-family: var(--font-mono);

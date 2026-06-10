@@ -173,7 +173,7 @@ export default function LakesPage({ params }: { params: Promise<{ id: string }> 
   const available = catalog.filter((c) => !linkedIds.has(c.id));
 
   return (
-    <div className="p-7 max-w-[1240px] mx-auto">
+    <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
       <SectionTitle right={
         !adding && (
           <Btn kind="accent" icon={Plus} onClick={() => { setAdding(true); setEditingId(null); }}>
@@ -437,7 +437,7 @@ function OutfitterPicker({
             Choose existing instead
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Name" value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Mattice Lake Outfitters" />
           <Field label="Run by" value={d.contact_person} onChange={(e) => set({ contact_person: e.target.value })} placeholder="Don & Anette Elliott" />
           <Field label="Phone" value={d.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="807-583-2483" />
@@ -472,10 +472,12 @@ function CabinForm({ draft, setDraft, onSave, onCancel, busy }: {
 }) {
   return (
     <div className="py-3" style={{ borderTop: "1px solid var(--border)" }}>
-      <div className="grid gap-3" style={{ gridTemplateColumns: "1.5fr 0.7fr 2fr" }}>
+      <div className="grid gap-3 grid-cols-[1.5fr_0.7fr] sm:[grid-template-columns:1.5fr_0.7fr_2fr]">
         <Field label="Cabin name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Cabin A" />
         <Field label="Beds" type="number" min={0} value={draft.capacity} onChange={(e) => setDraft({ ...draft, capacity: e.target.value })} placeholder="4" />
-        <Field label="Notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="lakeside, propane heat…" />
+        <div className="col-span-2 sm:col-span-1">
+          <Field label="Notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="lakeside, propane heat…" />
+        </div>
       </div>
       <div className="flex justify-end gap-2 mt-3">
         <Btn kind="ghost" size="sm" onClick={onCancel}>Cancel</Btn>

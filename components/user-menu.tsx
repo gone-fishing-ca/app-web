@@ -33,7 +33,7 @@ export function UserMenu() {
         title="Account"
       >
         <Avatar initials={initialsOf(user.name, user.email)} src={user.avatar_url} size={30} tone="primary" />
-        <span className="text-[13px] font-semibold" style={{ color: "var(--text-2)" }}>
+        <span className="hidden sm:inline text-[13px] font-semibold" style={{ color: "var(--text-2)" }}>
           {firstName}
         </span>
         <ChevronDown

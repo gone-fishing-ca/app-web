@@ -52,7 +52,7 @@ export default function NewTripPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header
-        className="px-8 py-5 flex items-center gap-4"
+        className="px-4 sm:px-8 py-4 sm:py-5 flex items-center gap-4"
         style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}
       >
         <Link href="/trips" className="inline-flex items-center gap-1.5 text-[13.5px]" style={{ color: "var(--text-2)" }}>
@@ -60,15 +60,14 @@ export default function NewTripPage() {
         </Link>
       </header>
 
-      <main className="max-w-[760px] mx-auto px-8 py-10">
+      <main className="max-w-[760px] mx-auto px-4 sm:px-8 py-6 sm:py-10">
         <Eyebrow>New trip</Eyebrow>
         <h1
-          className="mt-2 mb-8"
+          className="mt-2 mb-6 sm:mb-8 text-[28px] sm:text-[36px]"
           style={{
             fontFamily: "var(--font-display)",
             fontWeight: "var(--display-weight)" as unknown as number,
             letterSpacing: "var(--display-tracking)",
-            fontSize: 36,
             color: "var(--text)",
           }}
         >
@@ -89,7 +88,7 @@ export default function NewTripPage() {
               <div className="text-[12px] mt-1 mb-3" style={{ color: "var(--text-3)" }}>
                 Optional — seeds your first lake and a “Whole Trip” segment. Add more lakes later.
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Fly-in" type="date" icon={PlaneTakeoff} value={flyIn} onChange={(e) => setFlyIn(e.target.value)} />
                 <Field label="Fly-out" type="date" value={flyOut} onChange={(e) => setFlyOut(e.target.value)} />
               </div>

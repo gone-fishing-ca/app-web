@@ -49,19 +49,19 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="p-7 max-w-[1240px] mx-auto">
+    <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
       {/* Hero countdown */}
       <div
-        className="relative overflow-hidden rounded-3xl mb-6"
-        style={{ background: "var(--primary)", color: "var(--on-primary)", padding: "26px 30px", boxShadow: "var(--shadow-md)" }}
+        className="relative overflow-hidden rounded-3xl mb-6 px-5 py-5 sm:px-[30px] sm:py-[26px]"
+        style={{ background: "var(--primary)", color: "var(--on-primary)", boxShadow: "var(--shadow-md)" }}
       >
         <ContourBg stroke="#fff" opacity={0.1} />
         <div className="relative flex items-end justify-between gap-6 flex-wrap">
           <div>
             <Eyebrow style={{ color: "rgba(255,255,255,.7)" }}>Lines in the water</Eyebrow>
             <div
-              className="gf-mono mt-2 whitespace-nowrap"
-              style={{ fontSize: 52, fontWeight: 500, lineHeight: 1, letterSpacing: "-.01em" }}
+              className="gf-mono mt-2 whitespace-nowrap text-[42px] sm:text-[52px]"
+              style={{ fontWeight: 500, lineHeight: 1, letterSpacing: "-.01em" }}
             >
               {days !== null ? (
                 <>
@@ -80,13 +80,13 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
               )}
             </div>
           </div>
-          <img src="/walleye/walleye-cutout.png" alt=""
+          <img src="/walleye/walleye-cutout.png" alt="" className="hidden sm:block"
             style={{ width: 220, marginBottom: -34, marginRight: -6, filter: "drop-shadow(0 12px 22px rgba(0,0,0,.3))" }} />
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <StatCard icon={Users} label="Group" value={participants.length} foot="on the roster" tone="primary" />
         <StatCard icon={Waves} label="Lakes" value={lakes.length} foot="stops on the trip" />
         <StatCard icon={ClipboardList} label="Packed progress" value={`${packed} / ${totalSlots}`} foot={`${pct}% complete`} tone="primary" />
@@ -94,7 +94,7 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
       </div>
 
       {/* Quick lists */}
-      <div className="grid gap-5" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
+      <div className="grid gap-5 grid-cols-1 lg:[grid-template-columns:1.4fr_1fr]">
         <div>
           <SectionTitle right={
             <Link href={`/trips/${tripId}/participants`} className="text-[13px] font-semibold" style={{ color: "var(--accent-600)" }}>

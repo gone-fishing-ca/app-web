@@ -119,8 +119,8 @@ export default function PackListPage({ params }: { params: Promise<{ id: string 
   const pct = totalSlots > 0 ? Math.round((packedCount / totalSlots) * 100) : 0;
 
   return (
-    <div className="p-7 max-w-[1240px] mx-auto">
-      <div className="grid grid-cols-3 gap-4 mb-6">
+    <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
         <StatCard icon={ClipboardList} label="Items on list" value={items?.length ?? 0} />
         <StatCard icon={ClipboardList} label="Packed" value={`${packedCount} / ${totalSlots}`} foot={`${pct}% complete`} tone="primary" />
         <StatCard icon={ClipboardList} label="Categories" value={Object.values(grouped).filter((g) => g.length > 0).length} />
@@ -146,9 +146,12 @@ export default function PackListPage({ params }: { params: Promise<{ id: string 
           {CATEGORIES.map((cat) => {
             const list = grouped[cat] || [];
             if (list.length === 0) return null;
+            // Per-person check columns can outgrow a phone screen — the grid
+            // below the card header scrolls sideways instead of squishing.
+            const tableMinW = participants.length > 0 ? 300 + participants.length * 44 + 90 : 0;
             return (
               <Card key={cat}>
-                <div className="flex items-center justify-between px-5 py-3.5"
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3.5"
                   style={{ borderBottom: "1px solid var(--border)" }}>
                   <div className="flex items-center gap-2.5">
                     <div
@@ -167,69 +170,73 @@ export default function PackListPage({ params }: { params: Promise<{ id: string 
                   <Btn kind="ghost" size="sm" icon={Plus} onClick={() => startNew(cat)}>Add to {cat}</Btn>
                 </div>
 
-                {/* header */}
-                {participants.length > 0 && (
-                  <div className="grid items-center px-5 py-2 text-[11.5px] font-bold uppercase"
-                    style={{
-                      gridTemplateColumns: `2fr 1fr repeat(${participants.length}, 36px) 90px`,
-                      gap: 8,
-                      borderBottom: "1px solid var(--border)",
-                      letterSpacing: ".05em",
-                      color: "var(--text-3)",
-                    }}
-                  >
-                    <span>Item</span><span>Notes</span>
-                    {participants.map((p) => (
-                      <span key={p.id} className="text-center" title={p.name}>
-                        {initials(p.name)}
-                      </span>
-                    ))}
-                    <span></span>
-                  </div>
-                )}
+                <div className="overflow-x-auto">
+                  <div style={tableMinW ? { minWidth: tableMinW } : undefined}>
+                    {/* header */}
+                    {participants.length > 0 && (
+                      <div className="grid items-center px-4 sm:px-5 py-2 text-[11.5px] font-bold uppercase"
+                        style={{
+                          gridTemplateColumns: `2fr 1fr repeat(${participants.length}, 36px) 90px`,
+                          gap: 8,
+                          borderBottom: "1px solid var(--border)",
+                          letterSpacing: ".05em",
+                          color: "var(--text-3)",
+                        }}
+                      >
+                        <span>Item</span><span>Notes</span>
+                        {participants.map((p) => (
+                          <span key={p.id} className="text-center" title={p.name}>
+                            {initials(p.name)}
+                          </span>
+                        ))}
+                        <span></span>
+                      </div>
+                    )}
 
-                {list.map((it, i) => (
-                  <div key={it.id} className="grid items-center px-5 py-2.5"
-                    style={{
-                      gridTemplateColumns: participants.length > 0
-                        ? `2fr 1fr repeat(${participants.length}, 36px) 90px`
-                        : "2fr 1fr 90px",
-                      gap: 8,
-                      borderTop: i ? "1px solid var(--border)" : "none",
-                    }}
-                  >
-                    <div className="text-[14px] font-semibold" style={{ color: "var(--text)" }}>{it.name}</div>
-                    <div className="text-[12.5px]" style={{ color: "var(--text-3)" }}>{it.notes || "—"}</div>
-                    {participants.map((p) => {
-                      const done = statusMap.get(`${it.id}|${p.id}`) ?? false;
-                      return (
-                        <button key={p.id} onClick={() => toggleStatus(it, p)} title={`${p.name}: ${done ? "Packed" : "Not yet"}`}
-                          className="mx-auto grid place-items-center"
-                          style={{
-                            width: 22, height: 22, borderRadius: 6,
-                            background: done ? "var(--accent)" : "transparent",
-                            border: done ? "1px solid transparent" : "1.5px solid var(--border-strong)",
-                            color: "var(--on-accent)",
-                          }}
-                        >
-                          {done && <span style={{ fontSize: 13, fontWeight: 700 }}>✓</span>}
-                        </button>
-                      );
-                    })}
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => startEdit(it)} title="Edit"
-                        className="grid place-items-center"
-                        style={{ width: 28, height: 28, borderRadius: 7, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
-                        <Pencil size={13} />
-                      </button>
-                      <button onClick={() => remove(it.id)} title="Delete"
-                        className="grid place-items-center"
-                        style={{ width: 28, height: 28, borderRadius: 7, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                    {list.map((it, i) => (
+                      <div key={it.id} className="grid items-center px-4 sm:px-5 py-2.5"
+                        style={{
+                          gridTemplateColumns: participants.length > 0
+                            ? `2fr 1fr repeat(${participants.length}, 36px) 90px`
+                            : "2fr 1fr 90px",
+                          gap: 8,
+                          borderTop: i ? "1px solid var(--border)" : "none",
+                        }}
+                      >
+                        <div className="text-[14px] font-semibold" style={{ color: "var(--text)" }}>{it.name}</div>
+                        <div className="text-[12.5px]" style={{ color: "var(--text-3)" }}>{it.notes || "—"}</div>
+                        {participants.map((p) => {
+                          const done = statusMap.get(`${it.id}|${p.id}`) ?? false;
+                          return (
+                            <button key={p.id} onClick={() => toggleStatus(it, p)} title={`${p.name}: ${done ? "Packed" : "Not yet"}`}
+                              className="mx-auto grid place-items-center"
+                              style={{
+                                width: 22, height: 22, borderRadius: 6,
+                                background: done ? "var(--accent)" : "transparent",
+                                border: done ? "1px solid transparent" : "1.5px solid var(--border-strong)",
+                                color: "var(--on-accent)",
+                              }}
+                            >
+                              {done && <span style={{ fontSize: 13, fontWeight: 700 }}>✓</span>}
+                            </button>
+                          );
+                        })}
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => startEdit(it)} title="Edit"
+                            className="grid place-items-center"
+                            style={{ width: 28, height: 28, borderRadius: 7, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+                            <Pencil size={13} />
+                          </button>
+                          <button onClick={() => remove(it.id)} title="Delete"
+                            className="grid place-items-center"
+                            style={{ width: 28, height: 28, borderRadius: 7, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </Card>
             );
           })}
@@ -241,7 +248,7 @@ export default function PackListPage({ params }: { params: Promise<{ id: string 
           <div className="text-[13px] font-bold uppercase mb-3" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
             {draft.id ? "Edit pack list item" : "New pack list item"}
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Wool socks" />
             <label className="flex flex-col gap-1.5">
               <span className="text-[12.5px] font-semibold" style={{ color: "var(--text-2)" }}>Category</span>

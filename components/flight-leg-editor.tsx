@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
-import { Btn, ComboBox, Field } from "@/components/ui";
+import { Btn, ComboBox, Field, ModalShell } from "@/components/ui";
 import { api, type FlightLeg, type ItineraryItem, type Participant } from "@/lib/api";
 
 /** Create/edit modal for one person's flight segment under a flight
@@ -87,31 +86,28 @@ export function FlightLegEditor({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[60] grid place-items-center p-4"
-      style={{ background: "rgba(0,0,0,.45)" }}
-      onClick={onClose}
+    <ModalShell
+      title={leg ? "Edit flight leg" : "Add flight leg"}
+      maxWidth={480}
+      zIndex={60}
+      onClose={onClose}
+      footer={
+        <>
+          {leg && onDeleted && (
+            <Btn kind="ghost" className="mr-auto" onClick={del} disabled={busy}>
+              Delete
+            </Btn>
+          )}
+          <Btn kind="ghost" onClick={onClose}>
+            Cancel
+          </Btn>
+          <Btn kind="accent" onClick={save} disabled={busy || !canSave}>
+            {busy ? "Saving…" : leg ? "Save changes" : "Add"}
+          </Btn>
+        </>
+      }
     >
-      <div
-        className="w-full max-w-[480px] rounded-2xl"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
-            {leg ? "Edit flight leg" : "Add flight leg"}
-          </div>
-          <button
-            onClick={onClose}
-            title="Close"
-            className="grid place-items-center"
-            style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-3.5 px-5 py-4">
+      <div className="flex flex-col gap-3.5">
           {error && (
             <div className="rounded-[10px] px-3 py-2.5 text-[13px]" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>
               {error}
@@ -136,43 +132,24 @@ export function FlightLegEditor({
             disabled={personLocked}
           />
 
-          <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1.4fr" }}>
+          <div className="grid gap-3 [grid-template-columns:1fr_1.4fr]">
             <Field label="Flight #" value={flightNumber} onChange={(e) => setFlightNumber(e.target.value)} placeholder="UA208" />
             <Field label="Date" type="date" value={legDate} onChange={(e) => setLegDate(e.target.value)} hint={leg ? undefined : "Blank = the flight's date"} />
           </div>
 
-          <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Field label="From" value={origin} onChange={(e) => setOrigin(e.target.value.toUpperCase())} placeholder="RDM" maxLength={8} />
             <Field label="Departs" type="time" value={departs} onChange={(e) => setDeparts(e.target.value)} />
             <Field label="To" value={destination} onChange={(e) => setDestination(e.target.value.toUpperCase())} placeholder="MSP" maxLength={8} />
             <Field label="Arrives" type="time" value={arrives} onChange={(e) => setArrives(e.target.value)} />
           </div>
 
-          <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1.6fr" }}>
+          <div className="grid grid-cols-1 gap-3 sm:[grid-template-columns:1fr_1.6fr]">
             <Field label="Confirmation #" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} placeholder="ABC123" />
             <Field label="Pickup notes" value={carNotes} onChange={(e) => setCarNotes(e.target.value)} placeholder="Meet at baggage claim" />
           </div>
-        </div>
-
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <div>
-            {leg && onDeleted && (
-              <Btn kind="ghost" onClick={del} disabled={busy}>
-                Delete
-              </Btn>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Btn kind="ghost" onClick={onClose}>
-              Cancel
-            </Btn>
-            <Btn kind="accent" onClick={save} disabled={busy || !canSave}>
-              {busy ? "Saving…" : leg ? "Save changes" : "Add"}
-            </Btn>
-          </div>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

@@ -16,7 +16,8 @@ type Draft = {
 
 const EMPTY: Draft = { name: "", cell: "", email: "" };
 
-const COLS = "1.4fr 0.9fr 1.5fr 0.85fr 0.85fr 196px";
+// Desktop table columns; below lg the rows wrap into stacked card-style rows.
+const COLS = "lg:[grid-template-columns:1.4fr_0.9fr_1.5fr_0.85fr_0.85fr_196px]";
 
 type EditorState = { participantId: string; participantName: string; stay: Stay | null };
 
@@ -172,7 +173,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div className="p-7 max-w-[1240px] mx-auto">
+    <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
       <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={startNew}>Add person</Btn>}>
         Group
       </SectionTitle>
@@ -194,9 +195,9 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
           action={<Btn kind="accent" icon={Plus} onClick={startNew}>Add person</Btn>} />
       ) : (
         <Card pad={0}>
-          {/* header row */}
-          <div className="grid items-center px-5 py-3 text-[11.5px] font-bold uppercase"
-            style={{ gridTemplateColumns: COLS, letterSpacing: ".05em", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
+          {/* header row (desktop only — mobile rows are self-labelled) */}
+          <div className={`hidden lg:grid items-center px-5 py-3 text-[11.5px] font-bold uppercase ${COLS}`}
+            style={{ letterSpacing: ".05em", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
             <span>Name</span><span>Cell</span><span>Email</span><span>Fly in</span><span>Fly out</span><span></span>
           </div>
 
@@ -207,24 +208,26 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
             const pendingInv = pendingInviteFor(p);
             return (
               <div key={p.id} style={{ borderTop: i ? "1px solid var(--border)" : "none" }}>
-                <div className="grid items-center px-5 py-3" style={{ gridTemplateColumns: COLS }}>
-                  <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3 lg:grid lg:gap-0 lg:px-5 ${COLS}`}>
+                  <div className="order-1 lg:order-none flex items-center gap-2.5 min-w-0 flex-1">
                     <Avatar initials={initialsOf(p.name, p.email)} src={p.avatar_url} size={30} />
                     <span className="text-[14px] font-semibold truncate" style={{ color: "var(--text)" }}>{p.name}</span>
                     {!p.user_id && pendingInv && <Badge tone="warning" dot>Invited</Badge>}
                   </div>
-                  <div className="gf-mono text-[13px]" style={{ color: "var(--text-2)" }}>{p.cell || "—"}</div>
-                  <div className="text-[13px] truncate" style={{ color: "var(--text-2)" }}>{p.email || "—"}</div>
-                  <button onClick={() => toggle(p.id)} className="inline-flex items-center gap-1 text-[13px]"
+                  <div className={`order-3 lg:order-none gf-mono text-[13px] ${p.cell ? "" : "hidden lg:block"}`} style={{ color: "var(--text-2)" }}>{p.cell || "—"}</div>
+                  <div className={`order-4 lg:order-none min-w-0 text-[13px] truncate ${p.email ? "" : "hidden lg:block"}`} style={{ color: "var(--text-2)" }}>{p.email || "—"}</div>
+                  <button onClick={() => toggle(p.id)} className="order-5 lg:order-none inline-flex items-center gap-1 text-[13px]"
                     title="Show lake, dates & cabin"
                     style={{ color: flyIn ? "var(--accent-600)" : "var(--text-3)" }}>
                     {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <span className="lg:hidden font-semibold" style={{ color: "var(--text-3)" }}>In</span>
                     {flyIn ? fmtDate(flyIn) : "—"}
                   </button>
-                  <div className="text-[13px]" style={{ color: flyOut ? "var(--text-2)" : "var(--text-3)" }}>
+                  <div className="order-6 lg:order-none text-[13px]" style={{ color: flyOut ? "var(--text-2)" : "var(--text-3)" }}>
+                    <span className="lg:hidden font-semibold" style={{ color: "var(--text-3)" }}>Out </span>
                     {flyOut ? fmtDate(flyOut) : "—"}
                   </div>
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="order-2 lg:order-none flex items-center justify-end gap-1">
                     {!p.user_id && p.email && (
                       <Btn kind="subtle" size="sm" icon={Send} disabled={inviting === p.id} onClick={() => invite(p)}
                         title={pendingInv ? "Resend the invitation" : "Email an invitation to join"}>
@@ -234,10 +237,13 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
                     <IconBtn title="Edit" onClick={() => startEdit(p)}><Pencil size={14} /></IconBtn>
                     <IconBtn title="Delete" onClick={() => remove(p.id)}><Trash2 size={14} /></IconBtn>
                   </div>
+                  {/* Forces the wrap after the actions, so the zero-basis flex-1
+                      name block actually gets the rest of the first line. */}
+                  <span aria-hidden className="order-2 w-full lg:hidden" />
                 </div>
 
                 {open && (
-                  <div className="px-5 pb-3 pt-1" style={{ background: "var(--surface-2)" }}>
+                  <div className="px-4 lg:px-5 pb-3 pt-1" style={{ background: "var(--surface-2)" }}>
                     {lakes.length === 0 ? (
                       <div className="text-[13px] py-1" style={{ color: "var(--text-3)" }}>Add a lake to the trip first.</div>
                     ) : (
@@ -287,8 +293,8 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
               </div>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
               <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Marcus Townsend" />
             </div>
             <Field label="Cell" value={draft.cell} onChange={(e) => setDraft({ ...draft, cell: e.target.value })} placeholder="+1 555 555 5555" />
