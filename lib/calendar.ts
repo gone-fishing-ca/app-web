@@ -134,7 +134,7 @@ export function aggregateFlyEvents(opts: {
   const byId = new Map(participants.map((p) => [p.id, p]));
   const segById = new Map(segments.map((g) => [g.id, g]));
   const lName = new Map(tripLakes.map((l) => [l.id, l.name]));
-  const lakeOf = (s: Stay) => segById.get(s.segment_id)?.lake_id ?? s.lake_id;
+  const lakeOf = (s: Stay) => segById.get(s.segment_id)?.lake_id ?? null;
   const map = new Map<string, DayFly>();
   const get = (iso: string): DayFly => {
     let d = map.get(iso);

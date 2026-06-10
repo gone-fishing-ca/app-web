@@ -167,16 +167,17 @@ export type CatalogLake = {
   cabins: Cabin[];
 };
 /** A lake as it appears *on a trip* (GET /trips/{id}/lakes). `id` is the catalog
- *  lake id — so `stay.lake_id` joins straight to it — plus `trip_lake_id` (the join
- *  row, used to edit the fly window / unlink) and this trip's fly dates. */
+ *  lake id (what `Segment.lake_id` points at) plus `trip_lake_id` (the join row,
+ *  used to unlink/reorder). The fly window is derived server-side from the trip's
+ *  weeks at this lake. */
 export type TripLake = {
   id: string;            // catalog lake id
   trip_lake_id: string;  // TripLake join row id
   owner_id: string;      // catalog lake owner (gates editing in the UI)
   name: string;
   outfitter: Outfitter | null;
-  fly_in_date: string | null;
-  fly_out_date: string | null;
+  fly_in_date: string | null;   // derived: earliest week start at this lake
+  fly_out_date: string | null;  // derived: latest week end at this lake
   sort_order: number;
   cabins: Cabin[];
 };
@@ -194,13 +195,11 @@ export type Segment = {
 /** A participant's attendance at one week: cabin + optional date overrides.
  *  `start_date`/`end_date` are the raw overrides (null = adopting the week's
  *  dates by reference); `effective_*` are the resolved dates — read those for
- *  any display. `lake_id` is a deprecated mirror of the week's lake (resolve
- *  through the segment instead). */
+ *  any display. The lake comes through the segment. */
 export type Stay = {
   id: string;
   participant_id: string;
   segment_id: string;
-  lake_id: string | null;
   cabin_id: string | null;
   start_date: string | null;
   end_date: string | null;
