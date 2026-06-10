@@ -1,5 +1,10 @@
 import { deriveSpan } from "./format";
-import type { ItineraryItem, ItineraryKind, Participant, Stay, TripLake } from "./api";
+import type { ItineraryItem, ItineraryKind, Participant, Segment, Stay, TripLake } from "./api";
+
+/** A stay's resolved dates (override or the week's), shaped for deriveSpan. */
+export function effectiveDates(s: Stay): { start_date: string | null; end_date: string | null } {
+  return { start_date: s.effective_start_date, end_date: s.effective_end_date };
+}
 
 /* ------------------------------------------------------------------ *
  * Timezone-safe date helpers.
@@ -42,7 +47,7 @@ export function scheduleRange(
   tripLakes: TripLake[],
   extraDates: string[] = [],
 ): { spanStart: string | null; spanEnd: string | null; gridStart: string | null; gridEnd: string | null } {
-  let [spanStart, spanEnd] = deriveSpan(stays);
+  let [spanStart, spanEnd] = deriveSpan(stays.map(effectiveDates));
   if (!spanStart && !spanEnd) {
     [spanStart, spanEnd] = deriveSpan(
       tripLakes.map((tl) => ({ start_date: tl.fly_in_date, end_date: tl.fly_out_date })),
@@ -53,7 +58,7 @@ export function scheduleRange(
   // Widen the grid to show every marker — stay/fly dates plus any itinerary
   // items (e.g. pre-trip travel days that fall before the fishing window).
   const all = [
-    ...stays.flatMap((s) => [s.start_date, s.end_date]),
+    ...stays.flatMap((s) => [s.effective_start_date, s.effective_end_date]),
     ...tripLakes.flatMap((tl) => [tl.fly_in_date, tl.fly_out_date]),
     ...extraDates,
   ].filter((d): d is string => Boolean(d));
@@ -114,15 +119,22 @@ export type DayFly = {
   outTripLakes: string[];
 };
 
-/** Group stay starts/ends and trip-lake fly windows by ISO day. */
+/** Group stay starts/ends and trip-lake fly windows by ISO day. Contiguous
+ *  stays — the same person's next week starting at the same lake the day this
+ *  one ends — are coalesced: no phantom fly-out/in on the boundary day for
+ *  someone staying put. What's left on the boundary day is exactly the float
+ *  plane manifest: who leaves, who arrives. */
 export function aggregateFlyEvents(opts: {
   stays: Stay[];
   participants: Participant[];
   tripLakes: TripLake[];
+  segments: Segment[];
 }): Map<string, DayFly> {
-  const { stays, participants, tripLakes } = opts;
+  const { stays, participants, tripLakes, segments } = opts;
   const byId = new Map(participants.map((p) => [p.id, p]));
+  const segById = new Map(segments.map((g) => [g.id, g]));
   const lName = new Map(tripLakes.map((l) => [l.id, l.name]));
+  const lakeOf = (s: Stay) => segById.get(s.segment_id)?.lake_id ?? s.lake_id;
   const map = new Map<string, DayFly>();
   const get = (iso: string): DayFly => {
     let d = map.get(iso);
@@ -134,15 +146,22 @@ export function aggregateFlyEvents(opts: {
   };
 
   for (const s of stays) {
+    const lakeId = lakeOf(s);
+    const start = s.effective_start_date;
+    const end = s.effective_end_date;
+    const continues = (other: Stay) =>
+      other !== s && other.participant_id === s.participant_id && lakeOf(other) === lakeId;
+    const flowsIn = stays.some((o) => continues(o) && o.effective_end_date === start);
+    const flowsOut = stays.some((o) => continues(o) && o.effective_start_date === end);
     const p = byId.get(s.participant_id);
     const member: Member = {
       participantId: s.participant_id,
       name: p?.name ?? "Unknown",
       avatarUrl: p?.avatar_url ?? null,
-      lakeName: lName.get(s.lake_id) ?? "",
+      lakeName: (lakeId && lName.get(lakeId)) || "",
     };
-    if (s.start_date) get(s.start_date).in.push(member);
-    if (s.end_date) get(s.end_date).out.push(member);
+    if (start && !flowsIn) get(start).in.push(member);
+    if (end && !flowsOut) get(end).out.push(member);
   }
   for (const tl of tripLakes) {
     if (tl.fly_in_date) get(tl.fly_in_date).inTripLakes.push(tl.name);

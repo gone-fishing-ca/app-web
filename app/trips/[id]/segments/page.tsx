@@ -20,8 +20,8 @@ import { aggregateFlyEvents, aggregateItinerary, buildWeeks, packSegments, sched
 // Editor target: creating a new item of a kind, or editing an existing one.
 type EditorState = { mode: "create"; kind: ItineraryKind } | { mode: "edit"; item: ItineraryItem };
 
-type Draft = { id?: string; name: string; start_date: string; end_date: string };
-const EMPTY: Draft = { name: "", start_date: "", end_date: "" };
+type Draft = { id?: string; name: string; lake_id: string; start_date: string; end_date: string };
+const EMPTY: Draft = { name: "", lake_id: "", start_date: "", end_date: "" };
 
 function msg(e: unknown, fallback: string) {
   return e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : fallback;
@@ -72,35 +72,36 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     [gridStart, gridEnd, spanStart, spanEnd],
   );
   const dayFly = useMemo(
-    () => aggregateFlyEvents({ stays, participants, tripLakes }),
-    [stays, participants, tripLakes],
-  );
-
-  // The auto-created "Whole Trip" segment is implied by the calendar — hide it here.
-  const weekItems = useMemo(
-    () => (segments ?? []).filter((s) => s.name.trim().toLowerCase() !== "whole trip"),
-    [segments],
+    () => aggregateFlyEvents({ stays, participants, tripLakes, segments: segments ?? [] }),
+    [stays, participants, tripLakes, segments],
   );
 
   const { bars: segmentBars, laneCount } = useMemo(
     () =>
       packSegments(
-        weekItems
+        (segments ?? [])
           .filter((s) => s.start_date && s.end_date)
           .map((s) => ({ id: s.id, name: s.name, start: s.start_date!, end: s.end_date! })),
       ),
-    [weekItems],
+    [segments],
   );
 
   async function save() {
     if (!draft) return;
     setBusy(true);
     setError(null);
-    const body = { name: draft.name, start_date: draft.start_date || null, end_date: draft.end_date || null };
+    const body = {
+      name: draft.name,
+      lake_id: draft.lake_id || null,
+      start_date: draft.start_date || null,
+      end_date: draft.end_date || null,
+    };
     try {
       if (draft.id) {
         const updated = await api.patch<Segment>(`/trips/${tripId}/segments/${draft.id}`, body);
         setSegments((prev) => prev?.map((s) => (s.id === updated.id ? updated : s)) ?? null);
+        // Changing a week's dates/lake ripples into adopting stays — refetch.
+        api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
       } else {
         const created = await api.post<Segment>(`/trips/${tripId}/segments`, {
           ...body,
@@ -117,11 +118,12 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   }
 
   async function remove(id: string) {
-    if (!confirm("Delete this week? Stays that adopted its dates keep those dates (they just become custom).")) return;
+    if (!confirm("Delete this week? Everyone's attendance for it — cabins and custom dates included — is removed too.")) return;
     setBusy(true);
     try {
       await api.del(`/trips/${tripId}/segments/${id}`);
       setSegments((prev) => prev?.filter((s) => s.id !== id) ?? null);
+      setStays((prev) => prev.filter((s) => s.segment_id !== id));
       setDraft(null);
     } catch (e) {
       setError(msg(e, "Delete failed"));
@@ -131,8 +133,11 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   }
 
   function editWeek(id: string) {
-    const s = weekItems.find((w) => w.id === id);
-    if (s) setDraft({ id: s.id, name: s.name, start_date: s.start_date ?? "", end_date: s.end_date ?? "" });
+    const s = (segments ?? []).find((w) => w.id === id);
+    if (s) setDraft({
+      id: s.id, name: s.name, lake_id: s.lake_id ?? "",
+      start_date: s.start_date ?? "", end_date: s.end_date ?? "",
+    });
   }
 
   const selectedFly = selectedDay ? dayFly.get(selectedDay) : undefined;
@@ -225,9 +230,30 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
           <div className="flex flex-col gap-3">
             <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Week 1" />
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Start" type="date" value={draft.start_date} onChange={(e) => setDraft({ ...draft, start_date: e.target.value })} />
-              <Field label="End" type="date" value={draft.end_date} onChange={(e) => setDraft({ ...draft, end_date: e.target.value })} />
+              <Field label="Fly in" type="date" value={draft.start_date} onChange={(e) => setDraft({ ...draft, start_date: e.target.value })} />
+              <Field label="Fly out" type="date" value={draft.end_date} onChange={(e) => setDraft({ ...draft, end_date: e.target.value })} />
             </div>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold" style={{ color: "var(--text-2)" }}>Lake</span>
+              <span className="flex items-center rounded-[11px]"
+                style={{ background: "var(--surface)", border: "1px solid var(--border-strong)" }}>
+                <select
+                  value={draft.lake_id}
+                  onChange={(e) => setDraft({ ...draft, lake_id: e.target.value })}
+                  className="flex-1 min-w-0 bg-transparent outline-none text-[14.5px] py-3 px-3.5"
+                  style={{ color: "var(--text)", appearance: "none" }}
+                >
+                  <option value="">— TBD —</option>
+                  {tripLakes.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </span>
+              <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
+                Pick from the trip&rsquo;s lakes — add new ones on the Lakes &amp; cabins page.
+                Changing a week&rsquo;s lake clears its cabin assignments.
+              </span>
+            </label>
           </div>
         </ModalShell>
       )}

@@ -87,8 +87,6 @@ export default function LakesPage({ params }: { params: Promise<{ id: string }> 
       }
       await api.post<TripLake>(`/trips/${tripId}/lakes`, {
         lake_id: lakeId,
-        fly_in_date: form.fly_in_date || null,
-        fly_out_date: form.fly_out_date || null,
         sort_order: lakes?.length ?? 0,
       });
       await reload();
@@ -100,7 +98,8 @@ export default function LakesPage({ params }: { params: Promise<{ id: string }> 
     }
   }
 
-  // ---- Edit a trip lake: name + outfitter (catalog) and fly window (trip) ----
+  // ---- Edit a trip lake: name + outfitter (catalog facts). The fly window is
+  // derived from the weeks held at the lake — edit those on the Schedule page.
   async function saveLakeEdits(tl: TripLake, form: LakeFormValue) {
     setBusy(true); setError(null);
     try {
@@ -110,10 +109,6 @@ export default function LakesPage({ params }: { params: Promise<{ id: string }> 
           name: form.name, outfitter_id: outfitterId,
         });
       }
-      await api.patch<TripLake>(`/trips/${tripId}/lakes/${tl.trip_lake_id}`, {
-        fly_in_date: form.fly_in_date || null,
-        fly_out_date: form.fly_out_date || null,
-      });
       await reload();
       setEditingId(null);
     } catch (e) {
@@ -124,7 +119,7 @@ export default function LakesPage({ params }: { params: Promise<{ id: string }> 
   }
 
   async function unlinkLake(tl: TripLake) {
-    if (!confirm(`Remove ${tl.name} from this trip? The lake itself stays in your catalog; stays at it on this trip are cleared.`)) return;
+    if (!confirm(`Remove ${tl.name} from this trip? The lake itself stays in your catalog; weeks held at it become "lake TBD" and their cabin assignments are cleared.`)) return;
     try {
       await api.del(`/trips/${tripId}/lakes/${tl.trip_lake_id}`);
       setLakes((prev) => prev?.filter((l) => l.trip_lake_id !== tl.trip_lake_id) ?? null);
@@ -244,7 +239,7 @@ export default function LakesPage({ params }: { params: Promise<{ id: string }> 
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-none">
-                      <IconBtn title="Edit lake & fly window" onClick={() => { setEditingId(lake.trip_lake_id); setAdding(false); setCabinDraft(null); }}><Pencil size={14} /></IconBtn>
+                      {owned && <IconBtn title="Edit lake & outfitter" onClick={() => { setEditingId(lake.trip_lake_id); setAdding(false); setCabinDraft(null); }}><Pencil size={14} /></IconBtn>}
                       <IconBtn title="Remove from trip" onClick={() => unlinkLake(lake)}><Link2Off size={14} /></IconBtn>
                     </div>
                   </div>
@@ -310,8 +305,6 @@ type LakeFormValue = {
   existingLakeId: string | null;   // set when linking an existing catalog lake
   name: string;
   outfitter: OutfitterChoice;
-  fly_in_date: string;
-  fly_out_date: string;
 };
 
 function LakeForm({
@@ -334,8 +327,6 @@ function LakeForm({
   const [outfitter, setOutfitter] = useState<OutfitterChoice>(
     tripLake?.outfitter ? { kind: "existing", id: tripLake.outfitter.id } : { kind: "none" },
   );
-  const [flyIn, setFlyIn] = useState(tripLake?.fly_in_date ?? "");
-  const [flyOut, setFlyOut] = useState(tripLake?.fly_out_date ?? "");
 
   const lakeOptions = (available ?? []).map((l) => ({
     value: l.id, label: l.name, hint: l.outfitter?.name,
@@ -344,7 +335,7 @@ function LakeForm({
   function submit() {
     onSubmit({
       existingLakeId: !editing && mode === "pick" ? existingLakeId : null,
-      name, outfitter, fly_in_date: flyIn, fly_out_date: flyOut,
+      name, outfitter,
     });
   }
 
@@ -376,13 +367,15 @@ function LakeForm({
         </div>
       )}
 
-      {/* New-lake / edit-lake details (name + outfitter). Hidden while picking existing. */}
+      {/* New-lake / edit-lake details (name + outfitter). Hidden while picking
+          existing. The fly window isn't here — it's derived from the weeks held
+          at the lake (Schedule page). */}
       {!pickingExisting && (
         <div className="flex flex-col gap-3">
           {!owned ? (
             <div className="text-[12.5px] rounded-[10px] px-3 py-2.5"
               style={{ background: "var(--surface-2)", color: "var(--text-3)" }}>
-              This lake is shared from another trip — its name, outfitter, and cabins are read-only here. You can still set the fly-in/out window below.
+              This lake is shared from another trip — its name, outfitter, and cabins are read-only here.
             </div>
           ) : (
             <>
@@ -390,18 +383,9 @@ function LakeForm({
               <OutfitterPicker outfitters={outfitters} choice={outfitter} setChoice={setOutfitter} />
             </>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Fly-in" type="date" value={flyIn} onChange={(e) => setFlyIn(e.target.value)} />
-            <Field label="Fly-out" type="date" value={flyOut} onChange={(e) => setFlyOut(e.target.value)} />
+          <div className="text-[12px]" style={{ color: "var(--text-3)" }}>
+            Fly-in/out dates come from the weeks held at this lake — set them on the Schedule page.
           </div>
-        </div>
-      )}
-
-      {/* When picking an existing lake, still let them set this trip's fly window. */}
-      {pickingExisting && existingLakeId && (
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <Field label="Fly-in" type="date" value={flyIn} onChange={(e) => setFlyIn(e.target.value)} />
-          <Field label="Fly-out" type="date" value={flyOut} onChange={(e) => setFlyOut(e.target.value)} />
         </div>
       )}
 

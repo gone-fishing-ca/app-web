@@ -5,10 +5,10 @@ import Link from "next/link";
 import { BedDouble, Plus } from "lucide-react";
 import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
-import { api, type Cabin, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
+import { api, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
 
-type EditorState = { participantId: string; participantName: string; lakeId: string; stay: Stay | null };
+type EditorState = { participantId: string; participantName: string; segmentId: string; stay: Stay | null };
 
 export default function LodgingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: tripId } = use(params);
@@ -29,22 +29,22 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
       .catch((e) => setError(e.message ?? "Load failed"));
   }, [tripId]);
 
-  const segMap = useMemo(() => new Map(segments.map((s) => [s.id, s])), [segments]);
-  const cabinMap = useMemo(() => {
-    const m = new Map<string, Cabin>();
-    for (const l of lakes) for (const c of l.cabins) m.set(c.id, c);
-    return m;
-  }, [lakes]);
+  const lakeMap = useMemo(() => new Map(lakes.map((l) => [l.id, l])), [lakes]);
   const stayAt = useMemo(() => {
     const m = new Map<string, Stay>();
-    for (const s of stays) m.set(`${s.participant_id}:${s.lake_id}`, s);
+    for (const s of stays) m.set(`${s.participant_id}:${s.segment_id}`, s);
     return m;
   }, [stays]);
 
-  // Per-lake cabin occupancy (count of stays assigned to each cabin).
+  // Cabin occupancy per (week, cabin) — a cabin can host different people each week.
   const occupancy = useMemo(() => {
-    const m = new Map<string, number>(); // cabinId -> count
-    for (const s of stays) if (s.cabin_id) m.set(s.cabin_id, (m.get(s.cabin_id) ?? 0) + 1);
+    const m = new Map<string, number>(); // `${segmentId}:${cabinId}` -> count
+    for (const s of stays) {
+      if (s.cabin_id) {
+        const k = `${s.segment_id}:${s.cabin_id}`;
+        m.set(k, (m.get(k) ?? 0) + 1);
+      }
+    }
     return m;
   }, [stays]);
 
@@ -57,11 +57,17 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
   }
   function dropStay(id: string) { setStays((prev) => prev.filter((s) => s.id !== id)); }
 
-  function cellLabel(stay: Stay): { date: string; cabin: string | null; over: boolean } {
-    const seg = stay.segment_id ? segMap.get(stay.segment_id) : null;
-    const date = seg ? seg.name : (fmtRange(stay.start_date, stay.end_date) || "Dates TBD");
-    const cabin = stay.cabin_id ? cabinMap.get(stay.cabin_id) ?? null : null;
-    const over = Boolean(cabin && cabin.capacity != null && (occupancy.get(cabin.id) ?? 0) > cabin.capacity);
+  function cellLabel(seg: Segment, stay: Stay): { date: string; cabin: string | null; over: boolean } {
+    // Adopting stays just say "In"; overrides surface their dates.
+    const date = stay.start_date || stay.end_date
+      ? fmtRange(stay.effective_start_date, stay.effective_end_date) || "Dates TBD"
+      : "In";
+    const lake = seg.lake_id ? lakeMap.get(seg.lake_id) : null;
+    const cabin = stay.cabin_id ? lake?.cabins.find((c) => c.id === stay.cabin_id) ?? null : null;
+    const over = Boolean(
+      cabin && cabin.capacity != null
+      && (occupancy.get(`${seg.id}:${cabin.id}`) ?? 0) > cabin.capacity,
+    );
     return { date, cabin: cabin?.name ?? null, over };
   }
 
@@ -71,7 +77,7 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
     <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
       <SectionTitle>Lodging</SectionTitle>
       <p className="text-[13px] -mt-1 mb-4" style={{ color: "var(--text-3)" }}>
-        Who’s at which lake, for which dates, in which cabin. Click a cell to assign or edit a stay.
+        Who&rsquo;s on which week, in which cabin. Click a cell to assign or edit.
       </p>
 
       {error && (
@@ -80,27 +86,34 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
 
       {participants === null ? (
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
-      ) : lakes.length === 0 ? (
-        <EmptyState icon={BedDouble} title="No lakes yet"
-          subtitle="Add at least one lake first."
-          action={<Link href={`/trips/${tripId}/lakes`} className="text-[14px] font-semibold" style={{ color: "var(--accent-600)" }}>Go to Lakes &amp; cabins →</Link>} />
+      ) : segments.length === 0 ? (
+        <EmptyState icon={BedDouble} title="No weeks yet"
+          subtitle="Lay out the trip's weeks first, then assign cabins here."
+          action={<Link href={`/trips/${tripId}/segments`} className="text-[14px] font-semibold" style={{ color: "var(--accent-600)" }}>Go to Schedule →</Link>} />
       ) : participants.length === 0 ? (
         <EmptyState icon={BedDouble} title="No one in the group yet"
-          subtitle="Add people to the group, then assign their lakes &amp; dates here."
+          subtitle="Add people to the group, then assign their weeks &amp; cabins here."
           action={<Link href={`/trips/${tripId}/participants`} className="text-[14px] font-semibold" style={{ color: "var(--accent-600)" }}>Go to Group →</Link>} />
       ) : (
         <Card pad={0} className="overflow-x-auto">
-          <div style={{ minWidth: 220 + lakes.length * colW }}>
-            {/* Header: lake columns */}
+          <div style={{ minWidth: 220 + segments.length * colW }}>
+            {/* Header: week columns ("Week 1 · Ogoki") */}
             <div className="flex" style={{ borderBottom: "1px solid var(--border)" }}>
               <div className="flex-none px-5 py-3 text-[11.5px] font-bold uppercase"
                 style={{ width: 220, letterSpacing: ".05em", color: "var(--text-3)" }}>Person</div>
-              {lakes.map((l) => (
-                <div key={l.id} className="flex-none px-3 py-3" style={{ width: colW, borderLeft: "1px solid var(--border)" }}>
-                  <div className="text-[13px] font-semibold truncate" style={{ color: "var(--text)" }}>{l.name}</div>
-                  <div className="text-[11.5px] truncate" style={{ color: "var(--text-3)" }}>{fmtRange(l.fly_in_date, l.fly_out_date) || "Dates TBD"}</div>
-                </div>
-              ))}
+              {segments.map((g) => {
+                const lake = g.lake_id ? lakeMap.get(g.lake_id) : null;
+                return (
+                  <div key={g.id} className="flex-none px-3 py-3" style={{ width: colW, borderLeft: "1px solid var(--border)" }}>
+                    <div className="text-[13px] font-semibold truncate" style={{ color: "var(--text)" }}>
+                      {g.name}{lake ? ` · ${lake.name}` : ""}
+                    </div>
+                    <div className="text-[11.5px] truncate" style={{ color: "var(--text-3)" }}>
+                      {[fmtRange(g.start_date, g.end_date) || "Dates TBD", lake ? null : "lake TBD"].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Rows: participants */}
@@ -110,15 +123,15 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
                   <span className="text-[14px] font-semibold truncate" style={{ color: "var(--text)" }}>{p.name}</span>
                   {p.user_id && <Badge tone="accent">App</Badge>}
                 </div>
-                {lakes.map((l) => {
-                  const stay = stayAt.get(`${p.id}:${l.id}`) ?? null;
+                {segments.map((g) => {
+                  const stay = stayAt.get(`${p.id}:${g.id}`) ?? null;
                   return (
-                    <div key={l.id} className="flex-none p-2" style={{ width: colW, borderLeft: "1px solid var(--border)" }}>
+                    <div key={g.id} className="flex-none p-2" style={{ width: colW, borderLeft: "1px solid var(--border)" }}>
                       {stay ? (
-                        <button onClick={() => setEditor({ participantId: p.id, participantName: p.name, lakeId: l.id, stay })}
+                        <button onClick={() => setEditor({ participantId: p.id, participantName: p.name, segmentId: g.id, stay })}
                           className="w-full text-left rounded-[10px] px-2.5 py-2 transition hover:brightness-95"
                           style={{ background: "var(--accent-100)", border: "1px solid transparent" }}>
-                          {(() => { const { date, cabin, over } = cellLabel(stay); return (
+                          {(() => { const { date, cabin, over } = cellLabel(g, stay); return (
                             <>
                               <div className="text-[12.5px] font-semibold truncate" style={{ color: "var(--accent-600)" }}>{date}</div>
                               <div className="text-[12px] truncate flex items-center gap-1" style={{ color: over ? "var(--danger)" : "var(--text-2)" }}>
@@ -128,9 +141,9 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
                           ); })()}
                         </button>
                       ) : (
-                        <button onClick={() => setEditor({ participantId: p.id, participantName: p.name, lakeId: l.id, stay: null })}
+                        <button onClick={() => setEditor({ participantId: p.id, participantName: p.name, segmentId: g.id, stay: null })}
                           className="w-full grid place-items-center rounded-[10px] py-2.5 transition hover:brightness-95"
-                          style={{ border: "1px dashed var(--border-strong)", color: "var(--text-3)" }} title="Add lake & dates">
+                          style={{ border: "1px dashed var(--border-strong)", color: "var(--text-3)" }} title="Add to this week">
                           <Plus size={15} />
                         </button>
                       )}
@@ -140,26 +153,29 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
               </div>
             ))}
 
-            {/* Footer: cabin load per lake */}
+            {/* Footer: cabin load per week */}
             <div className="flex" style={{ borderTop: "1px solid var(--border)", background: "var(--surface-2)" }}>
               <div className="flex-none px-5 py-3 text-[11.5px] font-bold uppercase"
                 style={{ width: 220, letterSpacing: ".05em", color: "var(--text-3)" }}>Cabin load</div>
-              {lakes.map((l) => (
-                <div key={l.id} className="flex-none px-3 py-3 flex flex-col gap-1" style={{ width: colW, borderLeft: "1px solid var(--border)" }}>
-                  {l.cabins.length === 0 ? (
-                    <span className="text-[12px]" style={{ color: "var(--text-3)" }}>—</span>
-                  ) : l.cabins.map((c) => {
-                    const used = occupancy.get(c.id) ?? 0;
-                    const over = c.capacity != null && used > c.capacity;
-                    return (
-                      <span key={c.id} className="text-[12px] flex justify-between gap-2" style={{ color: over ? "var(--danger)" : "var(--text-2)" }}>
-                        <span className="truncate">{c.name}</span>
-                        <span className="gf-mono flex-none">{used}{c.capacity != null ? `/${c.capacity}` : ""}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              ))}
+              {segments.map((g) => {
+                const lake = g.lake_id ? lakeMap.get(g.lake_id) : null;
+                return (
+                  <div key={g.id} className="flex-none px-3 py-3 flex flex-col gap-1" style={{ width: colW, borderLeft: "1px solid var(--border)" }}>
+                    {!lake || lake.cabins.length === 0 ? (
+                      <span className="text-[12px]" style={{ color: "var(--text-3)" }}>—</span>
+                    ) : lake.cabins.map((c) => {
+                      const used = occupancy.get(`${g.id}:${c.id}`) ?? 0;
+                      const over = c.capacity != null && used > c.capacity;
+                      return (
+                        <span key={c.id} className="text-[12px] flex justify-between gap-2" style={{ color: over ? "var(--danger)" : "var(--text-2)" }}>
+                          <span className="truncate">{c.name}</span>
+                          <span className="gf-mono flex-none">{used}{c.capacity != null ? `/${c.capacity}` : ""}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </Card>
@@ -173,7 +189,7 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
           lakes={lakes}
           segments={segments}
           stay={editor.stay}
-          lockedLakeId={editor.lakeId}
+          lockedSegmentId={editor.segmentId}
           onSaved={upsertStay}
           onDeleted={dropStay}
           onClose={() => setEditor(null)}

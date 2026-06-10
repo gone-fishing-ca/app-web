@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users } from "lu
 import { Avatar, Badge, Btn, Card, ComboBox, EmptyState, Field, SectionTitle, initialsOf } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
 import { api, type Cabin, type Contact, type Invitation, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
+import { effectiveDates } from "@/lib/calendar";
 import { deriveSpan, fmtDate, fmtRange } from "@/lib/format";
 
 type Draft = {
@@ -12,9 +13,10 @@ type Draft = {
   name: string;
   cell: string;
   email: string;
+  segs: string[]; // week (segment) ids this person attends
 };
 
-const EMPTY: Draft = { name: "", cell: "", email: "" };
+const EMPTY: Omit<Draft, "segs"> = { name: "", cell: "", email: "" };
 
 // Desktop table columns; below lg the rows wrap into stacked card-style rows.
 const COLS = "lg:[grid-template-columns:1.4fr_0.9fr_1.5fr_0.85fr_0.85fr_196px]";
@@ -79,13 +81,37 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
     return m;
   }, [stays]);
 
-  function startNew() { setDraft({ ...EMPTY }); }
+  // New people default to every week — the most common case; unchecking is easy.
+  function startNew() { setDraft({ ...EMPTY, segs: segments.map((g) => g.id) }); }
   function startEdit(p: Participant) {
-    setDraft({ id: p.id, name: p.name, cell: p.cell ?? "", email: p.email ?? "" });
+    setDraft({
+      id: p.id, name: p.name, cell: p.cell ?? "", email: p.email ?? "",
+      segs: (staysByParticipant.get(p.id) ?? []).map((s) => s.segment_id),
+    });
   }
   function cancel() { setDraft(null); setError(null); }
   function toggle(id: string) {
     setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  /** Sync the person's week checkboxes to the API (diffed server-side) and fold
+   *  the resulting stays back into local state. */
+  async function syncSegments(participantId: string, segIds: string[]) {
+    const current = (staysByParticipant.get(participantId) ?? []);
+    const same =
+      current.length === segIds.length && current.every((s) => segIds.includes(s.segment_id));
+    if (same) return true;
+    const removed = current.filter((s) => !segIds.includes(s.segment_id));
+    const risky = removed.filter((s) => s.cabin_id || s.start_date || s.end_date);
+    if (risky.length && !confirm(
+      "Removing a week also clears that week's cabin assignment and custom dates. Continue?",
+    )) return false;
+    const updated = await api.put<Stay[]>(
+      `/trips/${tripId}/participants/${participantId}/segments`,
+      { segment_ids: segIds },
+    );
+    setStays((prev) => [...prev.filter((s) => s.participant_id !== participantId), ...updated]);
+    return true;
   }
 
   async function save() {
@@ -102,12 +128,13 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
         saved = await api.post<Participant>(`/trips/${tripId}/participants`, body);
         setItems((prev) => (prev ? [...prev, saved] : [saved]));
       }
+      const synced = await syncSegments(saved.id, draft.segs);
       // The API auto-links a roster row to a known account when the email belongs
       // to someone who accepted a past invite from this organizer.
       if (saved.user_id && !wasLinked) {
         setNotice(`${saved.name} was already in the app — added directly, no invite needed.`);
       }
-      setDraft(null);
+      if (synced) setDraft(null);
     } catch (e) {
       setError(e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : "Save failed");
     } finally {
@@ -120,6 +147,8 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
     try {
       const saved = await api.post<Participant>(`/trips/${tripId}/participants`, { contact_id: contactId });
       setItems((prev) => (prev ? [...prev, saved] : [saved]));
+      // Returning people default to every week too — adjust per person after.
+      await syncSegments(saved.id, segments.map((g) => g.id));
       if (saved.user_id) setNotice(`${saved.name} was already in the app — added directly, no invite needed.`);
       setDraft(null);
     } catch (e) {
@@ -165,11 +194,14 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   function dropStay(id: string) { setStays((prev) => prev.filter((s) => s.id !== id)); }
 
   function stayChip(s: Stay): string {
-    const lake = lakeMap.get(s.lake_id);
-    const seg = s.segment_id ? segMap.get(s.segment_id) : null;
-    const when = seg ? seg.name : (fmtRange(s.start_date, s.end_date) || "Dates TBD");
+    const seg = segMap.get(s.segment_id);
+    const lake = seg?.lake_id ? lakeMap.get(seg.lake_id) : null;
+    // Overridden dates surface on the chip; adopting stays just show the week.
+    const custom = s.start_date || s.end_date
+      ? fmtRange(s.effective_start_date, s.effective_end_date)
+      : null;
     const cabin = s.cabin_id ? cabinMap.get(s.cabin_id)?.name : null;
-    return [lake?.name ?? "Lake", when, cabin].filter(Boolean).join(" · ");
+    return [seg?.name ?? "Week", custom, lake?.name ?? "Lake TBD", cabin].filter(Boolean).join(" · ");
   }
 
   return (
@@ -203,7 +235,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
           {items.map((p, i) => {
             const myStays = staysByParticipant.get(p.id) ?? [];
-            const [flyIn, flyOut] = deriveSpan(myStays);
+            const [flyIn, flyOut] = deriveSpan(myStays.map(effectiveDates));
             const open = expanded.has(p.id);
             const pendingInv = pendingInviteFor(p);
             return (
@@ -244,8 +276,10 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
                 {open && (
                   <div className="px-4 lg:px-5 pb-3 pt-1" style={{ background: "var(--surface-2)" }}>
-                    {lakes.length === 0 ? (
-                      <div className="text-[13px] py-1" style={{ color: "var(--text-3)" }}>Add a lake to the trip first.</div>
+                    {segments.length === 0 ? (
+                      <div className="text-[13px] py-1" style={{ color: "var(--text-3)" }}>
+                        Lay out the trip&rsquo;s weeks on the Schedule page first.
+                      </div>
                     ) : (
                       <div className="flex flex-wrap items-center gap-1.5">
                         {myStays.map((s) => (
@@ -256,10 +290,12 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
                             <Pencil size={12} style={{ color: "var(--text-3)" }} />
                           </button>
                         ))}
-                        <Btn kind="subtle" size="sm" icon={Plus}
-                          onClick={() => setEditor({ participantId: p.id, participantName: p.name, stay: null })}>
-                          {myStays.length ? "Add" : "Add lake & dates"}
-                        </Btn>
+                        {myStays.length < segments.length && (
+                          <Btn kind="subtle" size="sm" icon={Plus}
+                            onClick={() => setEditor({ participantId: p.id, participantName: p.name, stay: null })}>
+                            {myStays.length ? "Add a week" : "Add to a week"}
+                          </Btn>
+                        )}
                       </div>
                     )}
                   </div>
@@ -300,8 +336,33 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
             <Field label="Cell" value={draft.cell} onChange={(e) => setDraft({ ...draft, cell: e.target.value })} placeholder="+1 555 555 5555" />
             <Field label="Email" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="you@example.com" />
           </div>
+          {segments.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[12.5px] font-semibold mb-1.5" style={{ color: "var(--text-2)" }}>Attending</div>
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                {segments.map((g) => (
+                  <label key={g.id} className="inline-flex items-center gap-2 text-[14px]" style={{ color: "var(--text)" }}>
+                    <input
+                      type="checkbox"
+                      checked={draft.segs.includes(g.id)}
+                      onChange={(e) => setDraft({
+                        ...draft,
+                        segs: e.target.checked
+                          ? [...draft.segs, g.id]
+                          : draft.segs.filter((id) => id !== g.id),
+                      })}
+                    />
+                    <span>{g.name}</span>
+                    <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
+                      {fmtRange(g.start_date, g.end_date) || "dates TBD"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="text-[12px] mt-3" style={{ color: "var(--text-3)" }}>
-            Assign lakes &amp; dates per person here, or all at once in <span style={{ color: "var(--text-2)" }}>Lodging</span>.
+            Cabins and custom fly dates are set per week — expand a person&rsquo;s row here, or use <span style={{ color: "var(--text-2)" }}>Lodging</span>.
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Btn kind="ghost" onClick={cancel}>Cancel</Btn>
@@ -318,7 +379,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
           lakes={lakes}
           segments={segments}
           stay={editor.stay}
-          takenLakeIds={(staysByParticipant.get(editor.participantId) ?? []).map((s) => s.lake_id)}
+          takenSegmentIds={(staysByParticipant.get(editor.participantId) ?? []).map((s) => s.segment_id)}
           onSaved={upsertStay}
           onDeleted={dropStay}
           onClose={() => setEditor(null)}

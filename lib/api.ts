@@ -180,25 +180,32 @@ export type TripLake = {
   sort_order: number;
   cabins: Cabin[];
 };
-/** A reusable named date range ("Week 1") — a template, not tied to a lake. */
+/** A week of the trip: a named date range at a lake (null = lake TBD). The unit
+ *  of attendance — participants join one or more weeks, each becoming a Stay. */
 export type Segment = {
   id: string;
   trip_id: string;
+  lake_id: string | null;
   name: string;
   start_date: string | null;
   end_date: string | null;
   sort_order: number;
 };
-/** One participant, at one lake, for a date range, in an assigned cabin.
- *  Adopt a segment's dates by sending segment_id with no start/end. */
+/** A participant's attendance at one week: cabin + optional date overrides.
+ *  `start_date`/`end_date` are the raw overrides (null = adopting the week's
+ *  dates by reference); `effective_*` are the resolved dates — read those for
+ *  any display. `lake_id` is a deprecated mirror of the week's lake (resolve
+ *  through the segment instead). */
 export type Stay = {
   id: string;
   participant_id: string;
-  lake_id: string;
+  segment_id: string;
+  lake_id: string | null;
   cabin_id: string | null;
-  segment_id: string | null;
   start_date: string | null;
   end_date: string | null;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
   notes: string | null;
 };
 /** A key date on the trip itinerary, shown on the Schedule calendar. `kind`
