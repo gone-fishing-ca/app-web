@@ -183,6 +183,11 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
                 {o.website && <InfoRow icon={Globe} href={o.website}>{prettyUrl(o.website)}</InfoRow>}
                 {o.address && <InfoRow icon={MapPin}>{o.address}</InfoRow>}
               </div>
+              {o.notes && (
+                <div className="text-[12.5px] mt-2.5 pt-2.5" style={{ color: "var(--text-3)", borderTop: "1px solid var(--border)" }}>
+                  {o.notes}
+                </div>
+              )}
             </Card>
           ))}
         </div>
