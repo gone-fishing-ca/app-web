@@ -42,7 +42,7 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — edited via the lake modal on the Overview week cards (no separate page) |
 | Contacts (group + relatives, outfitter edit, trip resources) | ✅ wired — address-book contacts & reusable resources |
 | Schedule (calendar + day-by-day itinerary: weeks, fly in/out, itinerary items) | ✅ wired |
-| Flight tracker (flight milestones + per-person legs) | ✅ wired |
+| Flights (per-person legs grouped by person, optional Schedule link, AeroDataBox schedule lookup) | ✅ wired |
 | Shared gear / Food / Beverages / Budget | stub page (API endpoints exist) |
 
 ## File map
@@ -65,7 +65,7 @@ app/
       contacts/page.tsx    group & relatives · outfitters · trip resources
       pack-list/page.tsx
       segments/page.tsx    Schedule (calendar + day-by-day itinerary list)
-      flights/page.tsx     Flight tracker (flight milestones + per-person legs)
+      flights/page.tsx     Flights (per-person legs grouped by person)
       {shared-gear,food,beverages,budget}/page.tsx  stubs
 components/
   ui.tsx                 Btn · Badge · Card · Field · Wordmark · StatCard · EmptyState · …

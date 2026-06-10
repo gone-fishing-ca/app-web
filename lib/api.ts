@@ -231,12 +231,13 @@ export type ItineraryItem = {
   participant_ids: string[];
 };
 
-/** One person's flight segment under a flight ItineraryItem (the group
- *  milestone on the Schedule). A connecting journey is multiple legs. Creating
- *  a leg auto-adds its participant to the parent item's members (API-side). */
+/** One person's flight segment, optionally linked to a flight ItineraryItem
+ *  (the group milestone on the Schedule). A connecting journey is multiple
+ *  legs. When linked, creating a leg auto-adds its participant to the parent
+ *  item's members (API-side). */
 export type FlightLeg = {
   id: string;
-  itinerary_item_id: string;
+  itinerary_item_id: string | null;
   participant_id: string;
   leg_date: string | null; // defaults to the item's date on create
   flight_number: string | null;
@@ -246,6 +247,20 @@ export type FlightLeg = {
   arrival_time: string | null;
   confirmation_code: string | null;
   car_notes: string | null;
+};
+
+/** One scheduled flight from GET /trips/{id}/flights/lookup (AeroDataBox) —
+ *  shaped like a FlightLeg so it pours straight into the editor form. The
+ *  endpoint 503s when the API has no AERODATABOX_API_KEY configured. */
+export type FlightLookupLeg = {
+  flight_number: string | null;
+  airline: string | null;
+  status: string | null;
+  leg_date: string | null;
+  origin_airport: string | null;
+  departure_time: string | null;
+  destination_airport: string | null;
+  arrival_time: string | null;
 };
 
 export type PackItem = {
