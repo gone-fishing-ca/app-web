@@ -19,7 +19,6 @@ import {
   Users,
   Utensils,
   Wallet,
-  Waves,
   Wrench,
   X,
 } from "lucide-react";
@@ -33,7 +32,6 @@ const NAV: { id: string; label: string; icon: typeof Users; href: string }[] = [
   { id: "",            label: "Overview",      icon: LayoutDashboard, href: "" },
   { id: "participants",label: "Group",         icon: Users,           href: "/participants" },
   { id: "contacts",    label: "Contacts",      icon: ContactRound,    href: "/contacts" },
-  { id: "lakes",       label: "Lakes & cabins",icon: Waves,           href: "/lakes" },
   { id: "segments",    label: "Schedule",      icon: CalendarRange,   href: "/segments" },
   { id: "lodging",     label: "Lodging",       icon: BedDouble,       href: "/lodging" },
   { id: "itinerary",   label: "Itinerary",     icon: Calendar,        href: "/itinerary" },

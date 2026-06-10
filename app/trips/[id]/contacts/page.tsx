@@ -160,7 +160,7 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
       ) : outfitters.length === 0 ? (
         <EmptyState icon={Tent} title="No outfitters yet"
-          subtitle="Outfitters from the lakes on this trip show up here automatically. Add a lake with an outfitter on the Lakes & cabins page." />
+          subtitle="Outfitters from the lakes on this trip show up here automatically. Set a lake's outfitter by clicking the lake on the Overview page." />
       ) : (
         <div className="grid gap-3 mb-8" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
           {outfitters.map(({ outfitter: o, lakes: runs }) => (

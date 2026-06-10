@@ -39,7 +39,7 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Dashboard (countdown, KPIs, crew, pack-list summary) | ✅ fully functional |
 | Participants | ✅ full CRUD + edit row |
 | Pack list (master list + per-participant statuses) | ✅ full CRUD + toggle |
-| Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — pick-or-create lakes/outfitters |
+| Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — edited via the lake modal on the Overview week cards (no separate page) |
 | Contacts (group + relatives, outfitter edit, trip resources) | ✅ wired — address-book contacts & reusable resources |
 | Schedule (calendar: weeks, fly in/out, itinerary items) | ✅ wired |
 | Flight tracker (flight milestones + per-person legs) | ✅ wired |

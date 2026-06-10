@@ -9,6 +9,7 @@ import {
   Waves,
 } from "lucide-react";
 import { Avatar, Btn, Card, Eyebrow, Field, ModalShell, SectionTitle, initialsOf } from "@/components/ui";
+import { LakeEditModal } from "@/components/lake-edit-modal";
 import { api, type TripLake, type Participant, type Segment, type Stay, type Trip } from "@/lib/api";
 import { daysUntil, fmtRange } from "@/lib/format";
 
@@ -27,6 +28,9 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Lake edit modal — opened by clicking a week's lake.
+  const [lakeWeek, setLakeWeek] = useState<Segment | null>(null);
+
   useEffect(() => {
     api.get<Trip>(`/trips/${tripId}`).then(setTrip).catch(() => {});
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setParticipants).catch(() => {});
@@ -34,6 +38,17 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
     api.get<Segment[]>(`/trips/${tripId}/segments`).then(setSegments).catch(() => {});
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
   }, [tripId]);
+
+  // The lake modal can rename lakes, assign one to a TBD week, and clear
+  // cabin assignments server-side — refetch everything it can touch.
+  function reloadLakes() {
+    api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setLakes).catch(() => {});
+    api.get<Segment[]>(`/trips/${tripId}/segments`).then((segs) => {
+      setSegments(segs);
+      setLakeWeek((prev) => prev ? segs.find((s) => s.id === prev.id) ?? prev : prev);
+    }).catch(() => {});
+    api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
+  }
 
   if (!trip) return <div className="p-8" style={{ color: "var(--text-3)" }}>Loading…</div>;
 
@@ -190,8 +205,10 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
           }>{weeks.length > 1 ? "Weeks" : "The week"}</SectionTitle>
           {weeks.length === 1 ? (
             <Card pad={20}>
-              <div
-                className="inline-flex items-center gap-2 mb-3.5 text-[17px]"
+              <button
+                onClick={() => setLakeWeek(weeks[0])}
+                title="Edit lake"
+                className="inline-flex items-center gap-2 mb-3.5 text-[17px] hover:underline"
                 style={{
                   fontFamily: "var(--font-display)",
                   fontWeight: "var(--display-weight)" as unknown as number,
@@ -200,7 +217,7 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
                 }}
               >
                 <Waves size={17} style={{ color: "var(--text-3)" }} /> {lakeNameOf(weeks[0])}
-              </div>
+              </button>
               <MemberChips people={membersOf(weeks[0].id)} emptyLabel="No one signed up yet." />
             </Card>
           ) : (
@@ -223,15 +240,30 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
                       {fmtRange(w.start_date, w.end_date) || "Dates TBD"}
                     </span>
                   </div>
-                  <div className="inline-flex items-center gap-1.5 mb-3.5 text-[13.5px]" style={{ color: "var(--text-2)" }}>
+                  <button
+                    onClick={() => setLakeWeek(w)}
+                    title="Edit lake"
+                    className="inline-flex items-center gap-1.5 mb-3.5 text-[13.5px] hover:underline"
+                    style={{ color: "var(--text-2)" }}
+                  >
                     <Waves size={15} style={{ color: "var(--text-3)" }} /> {lakeNameOf(w)}
-                  </div>
+                  </button>
                   <MemberChips people={membersOf(w.id)} emptyLabel="No one signed up yet." />
                 </Card>
               ))}
             </div>
           )}
         </div>
+      )}
+
+      {/* Lake edit modal */}
+      {lakeWeek && (
+        <LakeEditModal
+          tripId={tripId}
+          segment={lakeWeek}
+          onClose={() => setLakeWeek(null)}
+          onChanged={reloadLakes}
+        />
       )}
 
       {/* Trip edit modal */}

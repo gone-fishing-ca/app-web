@@ -155,7 +155,7 @@ export function StayEditor({
               </span>
             )}
             {lake && lake.cabins.length === 0 && (
-              <span className="text-[12px]" style={{ color: "var(--text-3)" }}>No cabins at this lake yet — add some on the Lakes page.</span>
+              <span className="text-[12px]" style={{ color: "var(--text-3)" }}>No cabins at this lake yet — add some by clicking the lake on the Overview page.</span>
             )}
           </label>
 

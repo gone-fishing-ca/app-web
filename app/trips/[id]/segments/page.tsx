@@ -250,7 +250,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
                 </select>
               </span>
               <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
-                Pick from the trip&rsquo;s lakes — add new ones on the Lakes &amp; cabins page.
+                Pick from the trip&rsquo;s lakes — add new ones by clicking a week&rsquo;s lake on the Overview page.
                 Changing a week&rsquo;s lake clears its cabin assignments.
               </span>
             </label>
