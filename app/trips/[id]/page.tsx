@@ -1,16 +1,18 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Calendar,
+  Check,
+  ChevronDown,
   MapPin,
   Users,
   Waves,
 } from "lucide-react";
 import { Avatar, Btn, Card, Eyebrow, Field, ModalShell, SectionTitle, initialsOf } from "@/components/ui";
 import { LakeEditModal } from "@/components/lake-edit-modal";
-import { api, type TripLake, type Participant, type Segment, type Stay, type Trip } from "@/lib/api";
+import { api, type Cabin, type TripLake, type Participant, type Segment, type Stay, type Trip } from "@/lib/api";
 import { daysUntil, fmtRange } from "@/lib/format";
 
 type EditDraft = { name: string; destination: string };
@@ -66,13 +68,19 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
   );
   const participantById = new Map(participants.map((p) => [p.id, p]));
   const lakeById = new Map(lakes.map((l) => [l.id, l]));
-  const membersOf = (segmentId: string): Participant[] =>
-    stays
-      .filter((s) => s.segment_id === segmentId)
-      .map((s) => participantById.get(s.participant_id))
-      .filter((p): p is Participant => Boolean(p))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  const lakeNameOf = (s: Segment) => (s.lake_id && lakeById.get(s.lake_id)?.name) || "Lake TBD";
+  const staysOf = (segmentId: string): Stay[] => stays.filter((s) => s.segment_id === segmentId);
+  const lakeOf = (s: Segment): TripLake | null => (s.lake_id ? lakeById.get(s.lake_id) ?? null : null);
+  const lakeNameOf = (s: Segment) => lakeOf(s)?.name || "Lake TBD";
+
+  // Optimistic cabin (re)assignment from the week cards; the server's copy wins
+  // on success, the old one comes back on failure.
+  function assignCabin(stay: Stay, cabinId: string | null) {
+    if ((stay.cabin_id ?? null) === cabinId) return;
+    setStays((prev) => prev.map((s) => (s.id === stay.id ? { ...s, cabin_id: cabinId } : s)));
+    api.patch<Stay>(`/trips/${tripId}/stays/${stay.id}`, { cabin_id: cabinId })
+      .then((saved) => setStays((prev) => prev.map((s) => (s.id === saved.id ? saved : s))))
+      .catch(() => setStays((prev) => prev.map((s) => (s.id === stay.id ? stay : s))));
+  }
 
   function openEdit() {
     setError(null);
@@ -218,7 +226,13 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
               >
                 <Waves size={17} style={{ color: "var(--text-3)" }} /> {lakeNameOf(weeks[0])}
               </button>
-              <MemberChips people={membersOf(weeks[0].id)} emptyLabel="No one signed up yet." />
+              <CabinGroups
+                lake={lakeOf(weeks[0])}
+                stays={staysOf(weeks[0].id)}
+                participantById={participantById}
+                onAssign={assignCabin}
+                emptyLabel="No one signed up yet."
+              />
             </Card>
           ) : (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
@@ -248,7 +262,13 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
                   >
                     <Waves size={15} style={{ color: "var(--text-3)" }} /> {lakeNameOf(w)}
                   </button>
-                  <MemberChips people={membersOf(w.id)} emptyLabel="No one signed up yet." />
+                  <CabinGroups
+                    lake={lakeOf(w)}
+                    stays={staysOf(w.id)}
+                    participantById={participantById}
+                    onAssign={assignCabin}
+                    emptyLabel="No one signed up yet."
+                  />
                 </Card>
               ))}
             </div>
@@ -324,6 +344,185 @@ function MemberChips({ people, emptyLabel }: { people: Participant[]; emptyLabel
         </span>
       ))}
     </div>
+  );
+}
+
+/** A week card's roster, grouped by cabin (cabins without anyone still show as
+ *  drop targets; people without one collect under "Unassigned" at the bottom).
+ *  Assignment is a drag onto a group or the chip's dropdown — both PATCH the
+ *  stay. Falls back to a flat chip list when the lake is TBD or has no cabins. */
+function CabinGroups({
+  lake, stays, participantById, onAssign, emptyLabel,
+}: {
+  lake: TripLake | null;
+  stays: Stay[];
+  participantById: Map<string, Participant>;
+  onAssign: (stay: Stay, cabinId: string | null) => void;
+  emptyLabel: string;
+}) {
+  const [dragStay, setDragStay] = useState<Stay | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+
+  const members = stays
+    .map((stay) => ({ stay, person: participantById.get(stay.participant_id) }))
+    .filter((m): m is { stay: Stay; person: Participant } => Boolean(m.person))
+    .sort((a, b) => a.person.name.localeCompare(b.person.name));
+
+  if (members.length === 0) {
+    return <div className="text-[14px]" style={{ color: "var(--text-3)" }}>{emptyLabel}</div>;
+  }
+
+  const cabins = lake
+    ? [...lake.cabins].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name))
+    : [];
+  if (cabins.length === 0) {
+    return <MemberChips people={members.map((m) => m.person)} emptyLabel={emptyLabel} />;
+  }
+
+  const cabinIds = new Set(cabins.map((c) => c.id));
+  const unassigned = members.filter((m) => !m.stay.cabin_id || !cabinIds.has(m.stay.cabin_id));
+  const groups: { key: string; cabinId: string | null; title: string; capacity: number | null; members: typeof members }[] = [
+    ...cabins.map((c) => ({
+      key: c.id, cabinId: c.id as string | null, title: c.name, capacity: c.capacity,
+      members: members.filter((m) => m.stay.cabin_id === c.id),
+    })),
+    // Kept while dragging even when empty, so a cabin assignment can be dragged off.
+    ...(unassigned.length > 0 || dragStay
+      ? [{ key: "unassigned", cabinId: null, title: "Unassigned", capacity: null, members: unassigned }]
+      : []),
+  ];
+
+  function drop(cabinId: string | null) {
+    if (dragStay) onAssign(dragStay, cabinId);
+    setDragStay(null);
+    setOverKey(null);
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 -mx-2.5">
+      {groups.map((g) => {
+        const over = g.capacity != null && g.members.length > g.capacity;
+        const targeted = overKey === g.key && dragStay != null;
+        return (
+          <div
+            key={g.key}
+            onDragOver={(e) => { if (dragStay) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverKey(g.key); } }}
+            onDragLeave={() => setOverKey((k) => (k === g.key ? null : k))}
+            onDrop={(e) => { e.preventDefault(); drop(g.cabinId); }}
+            className="rounded-[12px] px-2.5 py-1.5"
+            style={{
+              background: targeted ? "var(--accent-100)" : "transparent",
+              outline: `1.5px dashed ${targeted ? "var(--accent-600)" : "transparent"}`,
+              outlineOffset: -1.5,
+              transition: "background .12s",
+            }}
+          >
+            <div className="flex items-baseline gap-2 mb-1.5">
+              <span className="text-[11.5px] font-bold uppercase" style={{ letterSpacing: "0.08em", color: "var(--text-3)" }}>
+                {g.title}
+              </span>
+              <span className="gf-mono text-[11.5px]" style={{ color: over ? "var(--warning)" : "var(--text-3)" }}>
+                {g.members.length}{g.capacity != null ? `/${g.capacity}` : ""}{over ? " · over capacity" : ""}
+              </span>
+            </div>
+            {g.members.length === 0 ? (
+              <div className="text-[12.5px] py-0.5" style={{ color: "var(--text-3)", opacity: 0.75 }}>
+                {dragStay ? "Drop here" : "No one yet"}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {g.members.map(({ stay, person }) => (
+                  <StayChip
+                    key={stay.id}
+                    stay={stay}
+                    person={person}
+                    cabins={cabins}
+                    onAssign={onAssign}
+                    onDragStart={() => setDragStay(stay)}
+                    onDragEnd={() => { setDragStay(null); setOverKey(null); }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A member chip that can be dragged into a cabin group, with a dropdown of the
+ *  lake's cabins as the click/touch alternative. */
+function StayChip({ stay, person, cabins, onAssign, onDragStart, onDragEnd }: {
+  stay: Stay;
+  person: Participant;
+  cabins: Cabin[];
+  onAssign: (stay: Stay, cabinId: string | null) => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const options: { id: string | null; label: string }[] = [
+    { id: null, label: "No cabin" },
+    ...cabins.map((c) => ({ id: c.id as string | null, label: c.name })),
+  ];
+
+  return (
+    <span ref={wrapRef} className="relative inline-flex">
+      <button
+        type="button"
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", stay.id); // Firefox needs data to start a drag
+          e.dataTransfer.effectAllowed = "move";
+          setOpen(false);
+          onDragStart();
+        }}
+        onDragEnd={onDragEnd}
+        onClick={() => setOpen((v) => !v)}
+        title="Drag to a cabin, or click to pick one"
+        className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2 py-1 text-[13px] font-medium cursor-grab active:cursor-grabbing"
+        style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
+      >
+        <Avatar initials={initialsOf(person.name, person.email)} src={person.avatar_url} size={22} />
+        {person.name}
+        <ChevronDown size={13} strokeWidth={2.2} style={{ color: "var(--text-3)" }} />
+      </button>
+      {open && (
+        <div
+          className="absolute z-20 left-0 top-full mt-1.5 min-w-[180px] rounded-[12px] overflow-hidden py-1"
+          style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", boxShadow: "var(--shadow-md)" }}
+        >
+          {options.map((opt) => (
+            <button
+              key={opt.id ?? "none"}
+              type="button"
+              onClick={() => { setOpen(false); onAssign(stay, opt.id); }}
+              className="flex items-center gap-2 w-full text-left px-3 py-2 text-[13.5px]"
+              style={{ color: "var(--text)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              <span className="flex-none w-4">
+                {(stay.cabin_id ?? null) === opt.id && <Check size={14} style={{ color: "var(--accent-600)" }} />}
+              </span>
+              <span className="flex-1 min-w-0 truncate">{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }
 
