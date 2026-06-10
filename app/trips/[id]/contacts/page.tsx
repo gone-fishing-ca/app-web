@@ -289,7 +289,9 @@ function ContactRow({
   onDelete?: () => void;
 }) {
   return (
-    <div className="grid items-center px-5 py-2.5" style={{ gridTemplateColumns: GROUP_COLS }}>
+    // Relative rows tuck up under their primary: no top padding, slim bottom.
+    <div className={`grid items-center px-5 ${primary ? "py-2.5" : "pt-0 pb-2"}`}
+      style={{ gridTemplateColumns: GROUP_COLS }}>
       <div className={`flex items-center gap-2.5 min-w-0 ${primary ? "" : "pl-9"}`}>
         {primary && <Avatar initials={initialsOf(c.name, c.email)} src={c.avatar_url} size={28} />}
         <span className={`text-[13.5px] truncate ${primary ? "font-semibold" : ""}`}
