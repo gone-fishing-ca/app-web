@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Beer,
-  BedDouble,
   CalendarRange,
   ClipboardList,
   ContactRound,
@@ -32,7 +31,6 @@ const NAV: { id: string; label: string; icon: typeof Users; href: string }[] = [
   { id: "participants",label: "Group",         icon: Users,           href: "/participants" },
   { id: "contacts",    label: "Contacts",      icon: ContactRound,    href: "/contacts" },
   { id: "segments",    label: "Schedule",      icon: CalendarRange,   href: "/segments" },
-  { id: "lodging",     label: "Lodging",       icon: BedDouble,       href: "/lodging" },
   { id: "flights",     label: "Flight tracker",icon: PlaneTakeoff,    href: "/flights" },
   { id: "pack-list",   label: "Pack list",     icon: ClipboardList,   href: "/pack-list" },
   { id: "shared-gear", label: "Shared gear",   icon: Wrench,          href: "/shared-gear" },

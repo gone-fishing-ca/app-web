@@ -404,7 +404,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
             </div>
           )}
           <div className="text-[12px] mt-3" style={{ color: "var(--text-3)" }}>
-            Cabins and custom fly dates are set per week — expand a person&rsquo;s row in the list, or use <span style={{ color: "var(--text-2)" }}>Lodging</span>.
+            Cabins and custom fly dates are set per week — expand a person&rsquo;s row in the list, or use the week cards on <span style={{ color: "var(--text-2)" }}>Overview</span>.
           </div>
         </ModalShell>
       )}

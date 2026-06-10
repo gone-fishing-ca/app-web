@@ -5,10 +5,10 @@ import { Btn, Field, ModalShell } from "@/components/ui";
 import { api, type TripLake, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
 
-/** Editor for a participant's stay on one week (segment). Used from the Lodging
- *  grid (a cell, week locked) and the per-participant list on the Group page.
- *  Dates adopt the week's by reference — the "Custom dates" toggle stores an
- *  override; turning it off sends nulls to re-adopt. */
+/** Editor for a participant's stay on one week (segment). Used from the
+ *  per-participant list on the Group page. Dates adopt the week's by
+ *  reference — the "Custom dates" toggle stores an override; turning it off
+ *  sends nulls to re-adopt. */
 export function StayEditor({
   tripId, participantId, participantName, lakes, segments, stay, lockedSegmentId, takenSegmentIds, onSaved, onDeleted, onClose,
 }: {
