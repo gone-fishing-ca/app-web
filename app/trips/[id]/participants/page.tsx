@@ -2,9 +2,9 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import { BedDouble, ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
-import { Avatar, Badge, Btn, Card, EmptyState, Field, SectionTitle, initialsOf } from "@/components/ui";
+import { Avatar, Badge, Btn, Card, ComboBox, EmptyState, Field, SectionTitle, initialsOf } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
-import { api, type Cabin, type Invitation, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
+import { api, type Cabin, type Contact, type Invitation, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
 
 type Draft = {
@@ -24,6 +24,7 @@ type EditorState = { participantId: string; participantName: string; stay: Stay 
 export default function ParticipantsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: tripId } = use(params);
   const [items, setItems] = useState<Participant[] | null>(null);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [lakes, setLakes] = useState<TripLake[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
@@ -38,6 +39,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => {
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setItems).catch((e) => setError(e.message ?? "Load failed"));
+    api.get<Contact[]>(`/contacts`).then(setContacts).catch(() => {});
     api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setLakes).catch(() => {});
     api.get<Segment[]>(`/trips/${tripId}/segments`).then(setSegments).catch(() => {});
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
@@ -57,6 +59,12 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
     const inv = inviteByEmail.get(p.email.toLowerCase());
     return inv && inv.status === "pending" && new Date(inv.expires_at).getTime() > Date.now() ? inv : undefined;
   }
+
+  // Address-book people not already on this trip — the picker's options.
+  const pickable = useMemo(() => {
+    const onTrip = new Set((items ?? []).map((p) => p.contact_id).filter(Boolean));
+    return contacts.filter((c) => !onTrip.has(c.id));
+  }, [contacts, items]);
 
   const lakeMap = useMemo(() => new Map(lakes.map((l) => [l.id, l])), [lakes]);
   const segMap = useMemo(() => new Map(segments.map((s) => [s.id, s])), [segments]);
@@ -107,8 +115,22 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  async function addFromBook(contactId: string) {
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      const saved = await api.post<Participant>(`/trips/${tripId}/participants`, { contact_id: contactId });
+      setItems((prev) => (prev ? [...prev, saved] : [saved]));
+      if (saved.user_id) setNotice(`${saved.name} was already in the app — added directly, no invite needed.`);
+      setDraft(null);
+    } catch (e) {
+      setError(e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : "Add failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function remove(id: string) {
-    if (!confirm("Remove this person?")) return;
+    if (!confirm("Remove this person from the trip? They stay in your address book.")) return;
     try {
       await api.del(`/trips/${tripId}/participants/${id}`);
       setItems((prev) => prev?.filter((p) => p.id !== id) ?? null);
@@ -253,6 +275,24 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
           <div className="text-[13px] font-bold uppercase mb-3" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
             {draft.id ? "Edit person" : "New person"}
           </div>
+          {!draft.id && pickable.length > 0 && (
+            <div className="mb-4">
+              <ComboBox
+                label="Add from address book"
+                value={null}
+                placeholder="People from past trips…"
+                options={pickable.map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                  hint: c.relationship_label ?? c.email ?? undefined,
+                }))}
+                onSelect={addFromBook}
+              />
+              <div className="text-[12px] mt-2" style={{ color: "var(--text-3)" }}>
+                …or enter a new person below (they'll be saved to your address book too).
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Marcus Townsend" />
             <Field label="Car / travel group" value={draft.car_group} onChange={(e) => setDraft({ ...draft, car_group: e.target.value })} placeholder="A" />

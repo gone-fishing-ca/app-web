@@ -30,10 +30,10 @@ import { daysUntil, fmtRange } from "@/lib/format";
 const NAV: { id: string; label: string; icon: typeof Users; href: string }[] = [
   { id: "",            label: "Overview",      icon: LayoutDashboard, href: "" },
   { id: "participants",label: "Group",         icon: Users,           href: "/participants" },
+  { id: "contacts",    label: "Contacts",      icon: ContactRound,    href: "/contacts" },
   { id: "lakes",       label: "Lakes & cabins",icon: Waves,           href: "/lakes" },
   { id: "segments",    label: "Schedule",      icon: CalendarRange,   href: "/segments" },
   { id: "lodging",     label: "Lodging",       icon: BedDouble,       href: "/lodging" },
-  { id: "contacts",    label: "Contacts",      icon: ContactRound,    href: "/contacts" },
   { id: "itinerary",   label: "Itinerary",     icon: Calendar,        href: "/itinerary" },
   { id: "flights",     label: "Flight tracker",icon: PlaneTakeoff,    href: "/flights" },
   { id: "pack-list",   label: "Pack list",     icon: ClipboardList,   href: "/pack-list" },

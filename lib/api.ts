@@ -77,6 +77,7 @@ export type Trip = {
 export type Participant = {
   id: string;
   trip_id: string;
+  contact_id: string | null; // the address-book identity behind this roster row
   user_id: string | null; // linked auth account, or null for app-less roster rows
   name: string;
   avatar_url: string | null; // SSO profile photo of the linked account, if any
@@ -84,6 +85,54 @@ export type Participant = {
   email: string | null;
   car_group: string | null;
   // No dates here — a participant's span comes from their stays.
+  // name/cell/email live on the linked Contact; editing them here writes through.
+};
+
+/** A person in the reusable, owner-scoped address book. Linked onto trips by
+ *  Participant rows; relatives (spouse/child/…) hang off `related_to_id`. */
+export type Contact = {
+  id: string;
+  owner_id: string;
+  user_id: string | null; // set when this person actually has an app account
+  name: string;
+  cell: string | null;
+  home_phone: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  avatar_url: string | null;
+  related_to_id: string | null;
+  relationship_label: string | null; // "Spouse", "Brother", …
+};
+
+/** GET /trips/{id}/contacts — each roster member with relatives folded in. */
+export type ContactGroup = {
+  participant_id: string;
+  contact: Contact;
+  relatives: Contact[];
+};
+
+/** A reusable place/business/website (bait shop, dry-ice supplier) — an
+ *  owner-scoped catalog entity like Lake, linked per-trip via TripResource. */
+export type Resource = {
+  id: string;
+  owner_id: string;
+  name: string;
+  category: string | null;
+  contact_person: string | null;
+  phone: string | null;
+  alt_phone: string | null;
+  email: string | null;
+  website: string | null;
+  address: string | null;
+  notes: string | null;
+};
+
+/** A resource as it appears on a trip (GET /trips/{id}/resources). `id` is the
+ *  catalog resource id; `trip_resource_id` is the join row used to unlink. */
+export type TripResource = Resource & {
+  trip_resource_id: string;
+  sort_order: number;
 };
 
 /** A sleeping unit at a lake. */

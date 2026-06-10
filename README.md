@@ -40,7 +40,7 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Participants | ✅ full CRUD + edit row |
 | Pack list (master list + per-participant statuses) | ✅ full CRUD + toggle |
 | Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — pick-or-create lakes/outfitters |
-| Contacts | ✅ outfitters (from linked lakes) read-only; misc contacts stubbed |
+| Contacts (group + relatives, outfitter edit, trip resources) | ✅ wired — address-book contacts & reusable resources |
 | Schedule (calendar: weeks, fly in/out, itinerary items) | ✅ wired |
 | Flight tracker (flight milestones + per-person legs) | ✅ wired |
 | Itinerary / Shared gear / Food / Beverages / Budget | stub page (API endpoints exist) |
@@ -61,11 +61,12 @@ app/
     [id]/
       layout.tsx         sidebar + header + dark-mode toggle
       page.tsx           dashboard
-      participants/page.tsx
+      participants/page.tsx  Group roster (+ add-from-address-book picker)
+      contacts/page.tsx    group & relatives · outfitters · trip resources
       pack-list/page.tsx
       segments/page.tsx    Schedule calendar (weeks, fly in/out, itinerary items)
       flights/page.tsx     Flight tracker (flight milestones + per-person legs)
-      {contacts,itinerary,shared-gear,food,beverages,budget}/page.tsx  stubs
+      {itinerary,shared-gear,food,beverages,budget}/page.tsx  stubs
 components/
   ui.tsx                 Btn · Badge · Card · Field · Wordmark · StatCard · EmptyState · …
   stub.tsx               ModuleStub
