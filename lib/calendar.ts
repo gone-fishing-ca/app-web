@@ -100,7 +100,12 @@ export function buildWeeks(
  * Fly in / fly out aggregation.
  * ------------------------------------------------------------------ */
 
-export type Member = { participantId: string; name: string; lakeName: string };
+export type Member = {
+  participantId: string;
+  name: string;
+  avatarUrl: string | null;
+  lakeName: string;
+};
 
 export type DayFly = {
   in: Member[]; // people whose stay starts this day (clickable)
@@ -116,7 +121,7 @@ export function aggregateFlyEvents(opts: {
   tripLakes: TripLake[];
 }): Map<string, DayFly> {
   const { stays, participants, tripLakes } = opts;
-  const pName = new Map(participants.map((p) => [p.id, p.name]));
+  const byId = new Map(participants.map((p) => [p.id, p]));
   const lName = new Map(tripLakes.map((l) => [l.id, l.name]));
   const map = new Map<string, DayFly>();
   const get = (iso: string): DayFly => {
@@ -129,9 +134,11 @@ export function aggregateFlyEvents(opts: {
   };
 
   for (const s of stays) {
+    const p = byId.get(s.participant_id);
     const member: Member = {
       participantId: s.participant_id,
-      name: pName.get(s.participant_id) ?? "Unknown",
+      name: p?.name ?? "Unknown",
+      avatarUrl: p?.avatar_url ?? null,
       lakeName: lName.get(s.lake_id) ?? "",
     };
     if (s.start_date) get(s.start_date).in.push(member);

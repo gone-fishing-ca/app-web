@@ -9,7 +9,7 @@ import {
   Users,
   Waves,
 } from "lucide-react";
-import { Card, Eyebrow, SectionTitle, StatCard } from "@/components/ui";
+import { Avatar, Card, Eyebrow, SectionTitle, StatCard, initialsOf } from "@/components/ui";
 import { api, type TripLake, type PackItem, type PackStatus, type Participant, type Stay, type Trip } from "@/lib/api";
 import { daysUntil, deriveSpan, fmtRange } from "@/lib/format";
 
@@ -112,11 +112,7 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
                   className="flex items-center gap-3 px-5 py-3.5"
                   style={{ borderTop: i ? "1px solid var(--border)" : "none" }}
                 >
-                  <div className="grid place-items-center rounded-full text-[12px] font-bold"
-                    style={{ width: 32, height: 32, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
-                  >
-                    {initials(p.name)}
-                  </div>
+                  <Avatar initials={initialsOf(p.name, p.email)} src={p.avatar_url} size={32} />
                   <div className="flex-1 min-w-0">
                     <div className="text-[14px] font-semibold truncate" style={{ color: "var(--text)" }}>{p.name}</div>
                     <div className="text-[12.5px]" style={{ color: "var(--text-3)" }}>
@@ -158,10 +154,6 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
       </div>
     </div>
   );
-}
-
-function initials(name: string): string {
-  return name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
 function groupBy<T>(items: T[], key: (t: T) => string): Record<string, T[]> {

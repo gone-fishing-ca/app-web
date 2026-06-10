@@ -145,9 +145,22 @@ export function Card({ children, className, style, pad }: {
 }
 
 /* ---- Avatar -------------------------------------------------------------- */
-export function Avatar({ initials, size = 34, tone = "surface" }: {
-  initials: string; size?: number; tone?: "surface" | "primary" | "accent";
+/** Up to two initials for an avatar: first letters of the first two words of the
+ *  name, falling back to the email's local part. */
+export function initialsOf(name?: string | null, email?: string | null): string {
+  const base = name?.trim() || email?.split("@")[0]?.trim() || "";
+  return (
+    base.split(/\s+/).slice(0, 2).map((w) => w[0] ?? "").join("").toUpperCase() || "?"
+  );
+}
+
+/** Circle avatar: the SSO profile photo when `src` is set (and loads), the
+ *  initials otherwise. */
+export function Avatar({ initials, src, size = 34, tone = "surface" }: {
+  initials: string; src?: string | null; size?: number; tone?: "surface" | "primary" | "accent";
 }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [src]);
   const map: Record<string, CSSProperties> = {
     surface: { background: "var(--surface-2)", color: "var(--text-2)", border: "1px solid var(--border)" },
     primary: { background: "var(--primary)", color: "var(--on-primary)", border: "1px solid transparent" },
@@ -155,10 +168,21 @@ export function Avatar({ initials, size = 34, tone = "surface" }: {
   };
   return (
     <span
-      className="inline-grid place-items-center rounded-full font-bold"
+      className="inline-grid place-items-center rounded-full font-bold overflow-hidden flex-none"
       style={{ width: size, height: size, fontSize: size * 0.38, ...map[tone] }}
     >
-      {initials}
+      {src && !broken ? (
+        <img
+          src={src}
+          alt=""
+          // Google CDN avatar URLs 403 when a referrer is sent.
+          referrerPolicy="no-referrer"
+          onError={() => setBroken(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : (
+        initials
+      )}
     </span>
   );
 }

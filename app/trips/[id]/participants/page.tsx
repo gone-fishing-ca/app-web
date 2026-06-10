@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import { BedDouble, ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
-import { Badge, Btn, Card, EmptyState, Field, SectionTitle } from "@/components/ui";
+import { Avatar, Badge, Btn, Card, EmptyState, Field, SectionTitle, initialsOf } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
 import { api, type Cabin, type Invitation, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
 import { fmtRange } from "@/lib/format";
@@ -186,9 +186,10 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
             return (
               <div key={p.id} style={{ borderTop: i ? "1px solid var(--border)" : "none" }}>
                 <div className="grid items-center px-5 py-3" style={{ gridTemplateColumns: COLS }}>
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar initials={initialsOf(p.name, p.email)} src={p.avatar_url} size={30} />
                     <span className="text-[14px] font-semibold truncate" style={{ color: "var(--text)" }}>{p.name}</span>
-                    {p.user_id ? <Badge tone="accent">In the app</Badge> : pendingInv && <Badge tone="warning" dot>Invited</Badge>}
+                    {!p.user_id && pendingInv && <Badge tone="warning" dot>Invited</Badge>}
                   </div>
                   <div className="gf-mono text-[13px]" style={{ color: "var(--text-2)" }}>{p.cell || "—"}</div>
                   <div className="text-[13px] truncate" style={{ color: "var(--text-2)" }}>{p.email || "—"}</div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Plane, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
-import { Avatar, Card } from "@/components/ui";
+import { Avatar, Card, initialsOf } from "@/components/ui";
 import { KIND_META } from "@/components/itinerary-kit";
 import { placeSegments, parseISO, type Day, type DayFly, type Member, type SegmentBar } from "@/lib/calendar";
 import type { ItineraryItem } from "@/lib/api";
@@ -12,18 +12,6 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_NUM_H = 22; // day-number row at the top of each cell
 const LANE_H = 18; // a single segment bar
 const LANE_GAP = 3; // gap between stacked lanes
-
-function initials(name: string): string {
-  return (
-    name
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((w) => w[0] ?? "")
-      .join("")
-      .toUpperCase() || "?"
-  );
-}
 
 /* ---- Calendar grid ------------------------------------------------------- */
 
@@ -301,7 +289,7 @@ function FlyGroup({ kind, members, tripLakes }: { kind: "in" | "out"; members: M
         <div className="flex flex-col gap-2">
           {members.map((m) => (
             <div key={m.participantId} className="flex items-center gap-2.5">
-              <Avatar initials={initials(m.name)} size={30} />
+              <Avatar initials={initialsOf(m.name)} src={m.avatarUrl} size={30} />
               <div className="min-w-0">
                 <div className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>
                   {m.name}

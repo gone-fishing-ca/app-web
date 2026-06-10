@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Calendar, LogOut, MapPin, Plus, Users } from "lucide-react";
+import { Calendar, MapPin, Plus, Users } from "lucide-react";
 import { Btn, Card, Eyebrow, SectionTitle, Wordmark } from "@/components/ui";
+import { UserMenu } from "@/components/user-menu";
 import { api, type Trip } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { daysUntil, fmtRange } from "@/lib/format";
@@ -31,7 +32,7 @@ function bucketFor(trip: Trip, today: string): Bucket {
 
 export default function TripsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [trips, setTrips] = useState<Trip[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,9 +70,8 @@ export default function TripsPage() {
         style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}
       >
         <Wordmark size={18} glyph mode="light" />
-        <div className="ml-auto flex items-center gap-3">
-          <div className="text-[13px]" style={{ color: "var(--text-2)" }}>{user.email}</div>
-          <Btn kind="ghost" size="sm" icon={LogOut} onClick={signOut}>Sign out</Btn>
+        <div className="ml-auto">
+          <UserMenu />
         </div>
       </header>
 

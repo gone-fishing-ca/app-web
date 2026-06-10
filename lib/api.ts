@@ -61,7 +61,7 @@ export const api = {
 };
 
 /* ---- Types mirror the FastAPI schemas (Pydantic). Keep in sync. ---- */
-export type User = { id: string; email: string; name: string | null };
+export type User = { id: string; email: string; name: string | null; avatar_url: string | null };
 export type Trip = {
   id: string;
   organizer_id: string;
@@ -79,6 +79,7 @@ export type Participant = {
   trip_id: string;
   user_id: string | null; // linked auth account, or null for app-less roster rows
   name: string;
+  avatar_url: string | null; // SSO profile photo of the linked account, if any
   cell: string | null;
   email: string | null;
   car_group: string | null;

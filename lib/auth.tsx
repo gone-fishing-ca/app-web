@@ -32,7 +32,9 @@ function toAppUser(u: SbUser | null | undefined): User | null {
   if (!u) return null;
   const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
   const name = (meta.name as string | undefined) ?? (meta.full_name as string | undefined) ?? null;
-  return { id: u.id, email: u.email ?? "", name };
+  const avatar_url =
+    (meta.avatar_url as string | undefined) ?? (meta.picture as string | undefined) ?? null;
+  return { id: u.id, email: u.email ?? "", name, avatar_url };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

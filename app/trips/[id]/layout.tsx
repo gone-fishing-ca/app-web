@@ -12,7 +12,6 @@ import {
   ClipboardList,
   ContactRound,
   LayoutDashboard,
-  LogOut,
   Moon,
   PlaneTakeoff,
   Sun,
@@ -22,7 +21,8 @@ import {
   Waves,
   Wrench,
 } from "lucide-react";
-import { Avatar, Wordmark } from "@/components/ui";
+import { Wordmark } from "@/components/ui";
+import { UserMenu } from "@/components/user-menu";
 import { api, type Trip } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { daysUntil, fmtRange } from "@/lib/format";
@@ -53,7 +53,7 @@ export default function TripLayout({
   const { id: tripId } = use(params);
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [mode, setMode] = useState<"light" | "dark">("light");
   const [notFound, setNotFound] = useState(false);
@@ -88,7 +88,6 @@ export default function TripLayout({
 
   const base = `/trips/${tripId}`;
   const days = trip ? daysUntil(trip.start_date) : null;
-  const initials = (user.name || user.email || "?").split(/\s|@/)[0].slice(0, 2).toUpperCase();
 
   return (
     <div className="flex h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
@@ -170,16 +169,7 @@ export default function TripLayout({
           >
             {mode === "light" ? <Moon size={17} /> : <Sun size={17} />}
           </button>
-          <button onClick={signOut} className="flex items-center gap-2.5 pr-1 pl-3 py-1 rounded-full"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
-            title="Sign out"
-          >
-            <span className="text-[13px] font-semibold" style={{ color: "var(--text-2)" }}>
-              {user.name?.split(" ")[0] || user.email.split("@")[0]}
-            </span>
-            <Avatar initials={initials} size={30} tone="primary" />
-            <LogOut size={14} style={{ color: "var(--text-3)", marginLeft: 2, marginRight: 4 }} />
-          </button>
+          <UserMenu />
         </header>
 
         <main className="flex-1 overflow-y-auto">
