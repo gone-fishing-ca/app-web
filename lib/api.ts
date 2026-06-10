@@ -171,6 +171,23 @@ export type ItineraryItem = {
   participant_ids: string[];
 };
 
+/** One person's flight segment under a flight ItineraryItem (the group
+ *  milestone on the Schedule). A connecting journey is multiple legs. Creating
+ *  a leg auto-adds its participant to the parent item's members (API-side). */
+export type FlightLeg = {
+  id: string;
+  itinerary_item_id: string;
+  participant_id: string;
+  leg_date: string | null; // defaults to the item's date on create
+  flight_number: string | null;
+  origin_airport: string | null;
+  departure_time: string | null;
+  destination_airport: string | null;
+  arrival_time: string | null;
+  confirmation_code: string | null;
+  car_notes: string | null;
+};
+
 export type PackItem = {
   id: string;
   trip_id: string;

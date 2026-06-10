@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { Btn, ComboBox, Field } from "@/components/ui";
 import { KIND_META } from "@/components/itinerary-kit";
-import { api, type ItineraryItem, type ItineraryKind, type Participant } from "@/lib/api";
+import { FlightLegEditor } from "@/components/flight-leg-editor";
+import { api, type FlightLeg, type ItineraryItem, type ItineraryKind, type Participant } from "@/lib/api";
 
 /** Create/edit modal for an itinerary item. One modal, kind-aware: the fields
  *  shown (and their labels) depend on the kind. Reuses the StayEditor modal shell. */
@@ -34,7 +35,9 @@ export function ItineraryItemEditor({
   const [endTime, setEndTime] = useState(item?.end_time ?? "");
   const [location, setLocation] = useState(item?.location ?? "");
   const [endLocation, setEndLocation] = useState(item?.end_location ?? "");
-  const [confirmation, setConfirmation] = useState(item?.confirmation_code ?? "");
+  // Kept (not edited here) so saving never wipes a value entered before flight
+  // details moved down to legs.
+  const [confirmation] = useState(item?.confirmation_code ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
   const [memberIds, setMemberIds] = useState<string[]>(item?.participant_ids ?? []);
   const [busy, setBusy] = useState(false);
@@ -44,15 +47,41 @@ export function ItineraryItemEditor({
   const finalTitle = title.trim() || (effKind === "drive" ? "Drive" : "");
   const canSave = Boolean(finalTitle) && Boolean(itemDate);
 
+  // Flight items are the generic group milestone — flight numbers, times, and
+  // confirmations live on the per-person legs below, not on the item.
   const show = {
     endLocation: effKind === "drive" || effKind === "flight",
-    startTime: effKind !== "hotel",
-    endTime: effKind === "event" || effKind === "flight",
-    confirmation: effKind === "flight",
+    startTime: effKind === "event" || effKind === "drive",
+    endTime: effKind === "event",
   };
   const timeCols = (show.startTime ? 1 : 0) + (show.endTime ? 1 : 0);
   const dateRowCols = timeCols === 2 ? "1.4fr 1fr 1fr" : timeCols === 1 ? "1.4fr 1fr" : "1fr";
   const labels = LABELS[effKind];
+
+  // Per-person flight legs under an existing flight item.
+  const [legs, setLegs] = useState<FlightLeg[]>([]);
+  const [legEditor, setLegEditor] = useState<FlightLeg | null | "new">(null); // "new" = creating
+  const showLegs = Boolean(item) && effKind === "flight";
+  useEffect(() => {
+    if (!showLegs || !item) return;
+    api
+      .get<FlightLeg[]>(`/trips/${tripId}/flights`)
+      .then((all) => setLegs(all.filter((l) => l.itinerary_item_id === item.id)))
+      .catch(() => {});
+  }, [showLegs, item, tripId]);
+
+  function onLegSaved(saved: FlightLeg) {
+    setLegs((prev) => {
+      const i = prev.findIndex((l) => l.id === saved.id);
+      if (i === -1) return [...prev, saved];
+      const next = prev.slice();
+      next[i] = saved;
+      return next;
+    });
+    // The API auto-adds the leg's person to the item — mirror it here so saving
+    // the item afterwards doesn't strip them from participant_ids.
+    setMemberIds((prev) => (prev.includes(saved.participant_id) ? prev : [...prev, saved.participant_id]));
+  }
 
   async function save() {
     setBusy(true);
@@ -157,11 +186,50 @@ export function ItineraryItemEditor({
             <Field label={labels.location} value={location} onChange={(e) => setLocation(e.target.value)} placeholder={labels.locationPlaceholder} />
           )}
 
-          {show.confirmation && (
-            <Field label="Confirmation #" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} placeholder="ABC123" />
-          )}
-
           <MemberMultiSelect participants={participants} value={memberIds} onChange={setMemberIds} />
+
+          {showLegs && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[12.5px] font-semibold" style={{ color: "var(--text-2)" }}>
+                  Flight legs
+                </span>
+                <Btn kind="subtle" size="sm" icon={Plus} onClick={() => setLegEditor("new")}>
+                  Add leg
+                </Btn>
+              </div>
+              {legs.length === 0 ? (
+                <div className="text-[13px]" style={{ color: "var(--text-3)" }}>
+                  No individual flights yet — add each person&apos;s actual flights here.
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-[11px]" style={{ border: "1px solid var(--border)" }}>
+                  {legs.map((l, i) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => setLegEditor(l)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px]"
+                      style={{ color: "var(--text)", borderTop: i ? "1px solid var(--border)" : "none" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <span className="min-w-0 flex-1 truncate font-semibold">
+                        {participants.find((p) => p.id === l.participant_id)?.name ?? "Unknown"}
+                      </span>
+                      <span className="gf-mono flex-none text-[12px]" style={{ color: "var(--text-2)" }}>
+                        {l.flight_number ?? "—"}
+                      </span>
+                      <span className="flex-none text-[12px]" style={{ color: "var(--text-3)" }}>
+                        {l.origin_airport ?? "?"} → {l.destination_airport ?? "?"}
+                        {l.departure_time ? ` · ${l.departure_time}` : ""}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <label className="flex w-full flex-col gap-1.5">
             <span className="text-[12.5px] font-semibold" style={{ color: "var(--text-2)" }}>
@@ -200,6 +268,21 @@ export function ItineraryItemEditor({
             </Btn>
           </div>
         </div>
+
+        {/* Inside the stopPropagation panel so the leg editor's backdrop clicks
+            don't bubble out and close this modal too. */}
+        {legEditor && item && (
+          <FlightLegEditor
+            tripId={tripId}
+            participants={participants}
+            flightItems={[item]}
+            lockedItemId={item.id}
+            leg={legEditor === "new" ? null : legEditor}
+            onSaved={onLegSaved}
+            onDeleted={(id) => setLegs((prev) => prev.filter((l) => l.id !== id))}
+            onClose={() => setLegEditor(null)}
+          />
+        )}
       </div>
     </div>
   );
@@ -300,14 +383,14 @@ const LABELS: Record<ItineraryKind, KindLabels> = {
     endLocationPlaceholder: "",
   },
   flight: {
-    title: "Flight number",
-    titlePlaceholder: "AC123",
-    startTime: "Departs",
-    endTime: "Arrives",
+    title: "Name",
+    titlePlaceholder: "Fly to MSP",
+    startTime: "",
+    endTime: "",
     location: "From",
-    locationPlaceholder: "Origin",
+    locationPlaceholder: "Shared origin (optional)",
     endLocation: "To",
-    endLocationPlaceholder: "Destination",
+    endLocationPlaceholder: "Minneapolis (MSP)",
   },
 };
 
