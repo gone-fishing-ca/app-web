@@ -82,10 +82,11 @@ export type Participant = {
   name: string;
   avatar_url: string | null; // SSO profile photo of the linked account, if any
   cell: string | null;
+  home_phone: string | null;
   email: string | null;
   car_group: string | null;
   // No dates here — a participant's span comes from their stays.
-  // name/cell/email live on the linked Contact; editing them here writes through.
+  // name/cell/home_phone/email live on the linked Contact; editing them here writes through.
 };
 
 /** A person in the reusable, owner-scoped address book. Linked onto trips by
@@ -103,6 +104,9 @@ export type Contact = {
   avatar_url: string | null;
   related_to_id: string | null;
   relationship_label: string | null; // "Spouse", "Brother", …
+  // Trips (visible to the requester) this person is rostered on, newest first.
+  // Filled by GET /contacts only; non-empty ⇒ a participant on some trip.
+  trip_names: string[];
 };
 
 /** GET /trips/{id}/contacts — each roster member with relatives folded in. */

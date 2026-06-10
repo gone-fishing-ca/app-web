@@ -1,8 +1,8 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
-import { Avatar, Badge, Btn, Card, ComboBox, EmptyState, Field, SectionTitle, initialsOf } from "@/components/ui";
+import { ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, UserPlus, Users } from "lucide-react";
+import { Avatar, Badge, Btn, Card, EmptyState, Field, ModalShell, SectionTitle, initialsOf } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
 import { api, type Cabin, type Contact, type Invitation, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
 import { effectiveDates } from "@/lib/calendar";
@@ -12,11 +12,12 @@ type Draft = {
   id?: string;
   name: string;
   cell: string;
+  home: string;
   email: string;
   segs: string[]; // week (segment) ids this person attends
 };
 
-const EMPTY: Omit<Draft, "segs"> = { name: "", cell: "", email: "" };
+const EMPTY: Omit<Draft, "segs"> = { name: "", cell: "", home: "", email: "" };
 
 // Desktop table columns; below lg the rows wrap into stacked card-style rows.
 const COLS = "lg:[grid-template-columns:1.4fr_0.9fr_1.4fr_1.8fr_196px]";
@@ -32,6 +33,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   const [stays, setStays] = useState<Stay[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [picking, setPicking] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [inviting, setInviting] = useState<string | null>(null);
@@ -62,11 +64,15 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
     return inv && inv.status === "pending" && new Date(inv.expires_at).getTime() > Date.now() ? inv : undefined;
   }
 
-  // Address-book people not already on this trip — the picker's options.
+  // Address-book people not already on this trip, split for the picker:
+  // people rostered on other trips up front (the common "same crew next year"
+  // case), everyone else (relatives, standalone contacts) tucked behind a toggle.
   const pickable = useMemo(() => {
     const onTrip = new Set((items ?? []).map((p) => p.contact_id).filter(Boolean));
     return contacts.filter((c) => !onTrip.has(c.id));
   }, [contacts, items]);
+  const pastTrippers = useMemo(() => pickable.filter((c) => c.trip_names.length > 0), [pickable]);
+  const otherContacts = useMemo(() => pickable.filter((c) => c.trip_names.length === 0), [pickable]);
 
   const lakeMap = useMemo(() => new Map(lakes.map((l) => [l.id, l])), [lakes]);
   const segMap = useMemo(() => new Map(segments.map((s) => [s.id, s])), [segments]);
@@ -82,10 +88,10 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   }, [stays]);
 
   // New people default to every week — the most common case; unchecking is easy.
-  function startNew() { setDraft({ ...EMPTY, segs: segments.map((g) => g.id) }); }
+  function startNew() { setPicking(false); setDraft({ ...EMPTY, segs: segments.map((g) => g.id) }); }
   function startEdit(p: Participant) {
     setDraft({
-      id: p.id, name: p.name, cell: p.cell ?? "", email: p.email ?? "",
+      id: p.id, name: p.name, cell: p.cell ?? "", home: p.home_phone ?? "", email: p.email ?? "",
       segs: (staysByParticipant.get(p.id) ?? []).map((s) => s.segment_id),
     });
   }
@@ -117,7 +123,10 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   async function save() {
     if (!draft) return;
     setBusy(true); setError(null); setNotice(null);
-    const body = { name: draft.name, cell: draft.cell || null, email: draft.email || null };
+    const body = {
+      name: draft.name, cell: draft.cell || null, home_phone: draft.home || null,
+      email: draft.email || null,
+    };
     try {
       const wasLinked = draft.id ? Boolean(items?.find((p) => p.id === draft.id)?.user_id) : false;
       let saved: Participant;
@@ -142,17 +151,27 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
     }
   }
 
-  async function addFromBook(contactId: string) {
+  async function addFromBook(contactIds: string[]) {
     setBusy(true); setError(null); setNotice(null);
+    const added: string[] = [];
+    const known: string[] = [];
     try {
-      const saved = await api.post<Participant>(`/trips/${tripId}/participants`, { contact_id: contactId });
-      setItems((prev) => (prev ? [...prev, saved] : [saved]));
-      // Returning people default to every week too — adjust per person after.
-      await syncSegments(saved.id, segments.map((g) => g.id));
-      if (saved.user_id) setNotice(`${saved.name} was already in the app — added directly, no invite needed.`);
-      setDraft(null);
+      for (const contactId of contactIds) {
+        const saved = await api.post<Participant>(`/trips/${tripId}/participants`, { contact_id: contactId });
+        setItems((prev) => (prev ? [...prev, saved] : [saved]));
+        // Returning people default to every week too — adjust per person after.
+        await syncSegments(saved.id, segments.map((g) => g.id));
+        added.push(saved.name);
+        if (saved.user_id) known.push(saved.name);
+      }
+      const who = added.length === 1 ? added[0] : `${added.length} people`;
+      const aside = known.length ? ` ${known.join(", ")} already use${known.length === 1 ? "s" : ""} the app — no invite needed.` : "";
+      setNotice(`Added ${who} to the trip.${aside}`);
+      setPicking(false);
     } catch (e) {
-      setError(e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : "Add failed");
+      const reason = e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : "Add failed";
+      setError(added.length ? `Added ${added.join(", ")}, then: ${reason}` : reason);
+      setPicking(false);
     } finally {
       setBusy(false);
     }
@@ -219,7 +238,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
-      <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={startNew}>Add person</Btn>}>
+      <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={() => setPicking(true)}>Add people</Btn>}>
         Group
       </SectionTitle>
 
@@ -234,10 +253,10 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
       {items === null ? (
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
-      ) : items.length === 0 && !draft ? (
+      ) : items.length === 0 ? (
         <EmptyState icon={Users} title="No one in the group yet"
           subtitle="Add the first angler — you can stub the rest now and fill in details later."
-          action={<Btn kind="accent" icon={Plus} onClick={startNew}>Add person</Btn>} />
+          action={<Btn kind="accent" icon={Plus} onClick={() => setPicking(true)}>Add people</Btn>} />
       ) : (
         <Card pad={0}>
           {/* header row (desktop only — mobile rows are self-labelled) */}
@@ -319,35 +338,45 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
         </Card>
       )}
 
+      {picking && (
+        <AddPeopleModal
+          pastTrippers={pastTrippers}
+          otherContacts={otherContacts}
+          busy={busy}
+          onAdd={addFromBook}
+          onNewPerson={startNew}
+          onClose={() => setPicking(false)}
+        />
+      )}
+
       {draft && (
-        <Card pad={20} className="mt-5">
-          <div className="text-[13px] font-bold uppercase mb-3" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
-            {draft.id ? "Edit person" : "New person"}
-          </div>
-          {!draft.id && pickable.length > 0 && (
-            <div className="mb-4">
-              <ComboBox
-                label="Add from address book"
-                value={null}
-                placeholder="People from past trips…"
-                options={pickable.map((c) => ({
-                  value: c.id,
-                  label: c.name,
-                  hint: c.relationship_label ?? c.email ?? undefined,
-                }))}
-                onSelect={addFromBook}
-              />
-              <div className="text-[12px] mt-2" style={{ color: "var(--text-3)" }}>
-                …or enter a new person below (they'll be saved to your address book too).
-              </div>
-            </div>
+        <ModalShell
+          title={draft.id ? "Edit person" : "New person"}
+          subtitle={draft.id ? "Contact details apply on every trip this person is on" : "They'll be saved to your address book too"}
+          onClose={cancel}
+          maxWidth={560}
+          footer={
+            <>
+              <Btn kind="ghost" onClick={cancel}>Cancel</Btn>
+              <Btn kind="accent" onClick={save} disabled={busy || !draft.name.trim()}>
+                {busy ? "Saving…" : draft.id ? "Save changes" : "Add"}
+              </Btn>
+            </>
+          }
+        >
+          {error && (
+            <div className="mb-3 rounded-[10px] px-3 py-2.5 text-[13px]"
+              style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
               <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Marcus Townsend" />
             </div>
             <Field label="Cell" value={draft.cell} onChange={(e) => setDraft({ ...draft, cell: e.target.value })} placeholder="+1 555 555 5555" />
-            <Field label="Email" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="you@example.com" />
+            <Field label="Home" value={draft.home} onChange={(e) => setDraft({ ...draft, home: e.target.value })} placeholder="+1 555 555 5555" />
+            <div className="sm:col-span-2">
+              <Field label="Email" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="you@example.com" />
+            </div>
           </div>
           {segments.length > 0 && (
             <div className="mt-4">
@@ -375,13 +404,9 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
             </div>
           )}
           <div className="text-[12px] mt-3" style={{ color: "var(--text-3)" }}>
-            Cabins and custom fly dates are set per week — expand a person&rsquo;s row here, or use <span style={{ color: "var(--text-2)" }}>Lodging</span>.
+            Cabins and custom fly dates are set per week — expand a person&rsquo;s row in the list, or use <span style={{ color: "var(--text-2)" }}>Lodging</span>.
           </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Btn kind="ghost" onClick={cancel}>Cancel</Btn>
-            <Btn kind="accent" onClick={save} disabled={busy || !draft.name.trim()}>{busy ? "Saving…" : draft.id ? "Save changes" : "Add"}</Btn>
-          </div>
-        </Card>
+        </ModalShell>
       )}
 
       {editor && (
@@ -399,6 +424,84 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
         />
       )}
     </div>
+  );
+}
+
+/** One-click roster building: everyone from the user's other trips who isn't on
+ *  this one yet, as a checkbox list — check the crew, hit Add. Address-book
+ *  contacts who've never been on a trip (spouses, emergency contacts) hide
+ *  behind a toggle; brand-new people go through the New person form. */
+function AddPeopleModal({
+  pastTrippers, otherContacts, busy, onAdd, onNewPerson, onClose,
+}: {
+  pastTrippers: Contact[];
+  otherContacts: Contact[];
+  busy: boolean;
+  onAdd: (contactIds: string[]) => void;
+  onNewPerson: () => void;
+  onClose: () => void;
+}) {
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [showOthers, setShowOthers] = useState(false);
+
+  function toggle(id: string) {
+    setPicked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  function row(c: Contact, hint: string | null) {
+    return (
+      <label key={c.id} className="flex items-center gap-2.5 px-2 py-2 rounded-[10px] cursor-pointer transition hover:brightness-95"
+        style={{ background: picked.has(c.id) ? "var(--surface-2)" : "transparent" }}>
+        <input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)} />
+        <Avatar initials={initialsOf(c.name, c.email)} src={c.avatar_url} size={26} />
+        <span className="text-[14px] font-medium truncate" style={{ color: "var(--text)" }}>{c.name}</span>
+        {hint && <span className="text-[12px] truncate" style={{ color: "var(--text-3)" }}>{hint}</span>}
+      </label>
+    );
+  }
+
+  return (
+    <ModalShell
+      title="Add people"
+      subtitle="Everyone you add starts on every week — fine-tune per person after"
+      onClose={onClose}
+      maxWidth={560}
+      footer={
+        <>
+          <Btn kind="ghost" icon={UserPlus} className="mr-auto" onClick={onNewPerson}>New person</Btn>
+          <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn kind="accent" disabled={busy || picked.size === 0} onClick={() => onAdd([...picked])}>
+            {busy ? "Adding…" : picked.size > 1 ? `Add ${picked.size} people` : "Add to trip"}
+          </Btn>
+        </>
+      }
+    >
+      {pastTrippers.length === 0 ? (
+        <div className="text-[13.5px] py-1" style={{ color: "var(--text-3)" }}>
+          Everyone from your other trips is already in this group.
+          {otherContacts.length === 0 && " Use “New person” to add someone new."}
+        </div>
+      ) : (
+        <div className="flex flex-col">
+          {pastTrippers.map((c) => row(c, c.trip_names.join(" · ")))}
+        </div>
+      )}
+      {otherContacts.length > 0 && (
+        <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+          <button onClick={() => setShowOthers((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold"
+            style={{ color: "var(--text-3)" }}>
+            {showOthers ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            Address book — not on any trip ({otherContacts.length})
+          </button>
+          {showOthers && (
+            <div className="flex flex-col mt-1.5">
+              {otherContacts.map((c) => row(c, c.relationship_label ?? c.email))}
+            </div>
+          )}
+        </div>
+      )}
+    </ModalShell>
   );
 }
 
