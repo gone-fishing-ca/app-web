@@ -1,8 +1,8 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { CalendarRange, MapPinned, Pencil, Plus, Trash2, X } from "lucide-react";
-import { Btn, Card, EmptyState, Field, SectionTitle } from "@/components/ui";
+import { CalendarRange, X } from "lucide-react";
+import { Btn, EmptyState, Field, SectionTitle } from "@/components/ui";
 import { TripCalendar, DayDetailModal } from "@/components/trip-calendar";
 import { AddMenu } from "@/components/add-menu";
 import { ItineraryItemEditor } from "@/components/itinerary-editor";
@@ -15,7 +15,6 @@ import {
   type Stay,
   type TripLake,
 } from "@/lib/api";
-import { fmtRange } from "@/lib/format";
 import { aggregateFlyEvents, aggregateItinerary, buildWeeks, packSegments, scheduleRange } from "@/lib/calendar";
 
 // Editor target: creating a new item of a kind, or editing an existing one.
@@ -39,7 +38,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
 
-  // Week management (carried over from the old segments page).
+  // Week (segment) create/edit modal — weeks live on the calendar itself.
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,12 +118,21 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
 
   async function remove(id: string) {
     if (!confirm("Delete this week? Stays that adopted its dates keep those dates (they just become custom).")) return;
+    setBusy(true);
     try {
       await api.del(`/trips/${tripId}/segments/${id}`);
       setSegments((prev) => prev?.filter((s) => s.id !== id) ?? null);
+      setDraft(null);
     } catch (e) {
       setError(msg(e, "Delete failed"));
+    } finally {
+      setBusy(false);
     }
+  }
+
+  function editWeek(id: string) {
+    const s = weekItems.find((w) => w.id === id);
+    if (s) setDraft({ id: s.id, name: s.name, start_date: s.start_date ?? "", end_date: s.end_date ?? "" });
   }
 
   const selectedFly = selectedDay ? dayFly.get(selectedDay) : undefined;
@@ -143,8 +151,16 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="p-7 max-w-[980px] mx-auto">
-      <SectionTitle right={<AddMenu onPick={(kind) => setEditor({ mode: "create", kind })} />}>
+    <div className="p-7 max-w-[1240px] mx-auto">
+      <SectionTitle
+        right={
+          <AddMenu
+            onPick={(kind) =>
+              kind === "week" ? setDraft({ ...EMPTY }) : setEditor({ mode: "create", kind })
+            }
+          />
+        }
+      >
         Schedule
       </SectionTitle>
 
@@ -175,55 +191,9 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
           laneCount={laneCount}
           onPickDay={setSelectedDay}
           onPickItem={(item) => setEditor({ mode: "edit", item })}
+          onPickSegment={editWeek}
         />
       )}
-
-      {/* ---- Weeks ---- */}
-      <div className="mt-9">
-        <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={() => setDraft({ ...EMPTY })}>Add week</Btn>}>
-          Weeks
-        </SectionTitle>
-
-        {segments === null ? (
-          <div style={{ color: "var(--text-3)" }}>Loading…</div>
-        ) : weekItems.length === 0 ? (
-          <EmptyState
-            icon={MapPinned}
-            title="No weeks yet"
-            subtitle="Split the trip into multiple weeks for different group members."
-            action={<Btn kind="accent" icon={Plus} onClick={() => setDraft({ ...EMPTY })}>Add week</Btn>}
-          />
-        ) : (
-          <Card>
-            <div
-              className="grid items-center px-5 py-3 text-[11.5px] font-bold uppercase"
-              style={{ gridTemplateColumns: "1.4fr 1.6fr 100px", letterSpacing: ".05em", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}
-            >
-              <span>Name</span>
-              <span>Dates</span>
-              <span></span>
-            </div>
-            {weekItems.map((s, i) => (
-              <div
-                key={s.id}
-                className="grid items-center px-5 py-3"
-                style={{ gridTemplateColumns: "1.4fr 1.6fr 100px", borderTop: i ? "1px solid var(--border)" : "none" }}
-              >
-                <span className="text-[14px] font-semibold" style={{ color: "var(--text)" }}>{s.name}</span>
-                <span className="text-[13px]" style={{ color: "var(--text-2)" }}>{fmtRange(s.start_date, s.end_date) || "—"}</span>
-                <div className="flex items-center justify-end gap-1">
-                  <IconBtn title="Edit" onClick={() => setDraft({ id: s.id, name: s.name, start_date: s.start_date ?? "", end_date: s.end_date ?? "" })}>
-                    <Pencil size={14} />
-                  </IconBtn>
-                  <IconBtn title="Delete" onClick={() => remove(s.id)}>
-                    <Trash2 size={14} />
-                  </IconBtn>
-                </div>
-              </div>
-            ))}
-          </Card>
-        )}
-      </div>
 
       {draft && (
         <div
@@ -265,11 +235,20 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
                   <Field label="End" type="date" value={draft.end_date} onChange={(e) => setDraft({ ...draft, end_date: e.target.value })} />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 mt-5">
-                <Btn kind="ghost" onClick={() => setDraft(null)}>Cancel</Btn>
-                <Btn kind="accent" onClick={save} disabled={busy || !draft.name.trim()}>
-                  {busy ? "Saving…" : draft.id ? "Save changes" : "Add"}
-                </Btn>
+              <div className="flex items-center justify-between mt-5">
+                <div>
+                  {draft.id && (
+                    <Btn kind="ghost" onClick={() => remove(draft.id!)} disabled={busy}>Delete</Btn>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Btn kind="ghost" onClick={() => setDraft(null)}>Cancel</Btn>
+                  {/* Dates are required — the calendar is the only place weeks show,
+                      and an undated week would be invisible and unreachable. */}
+                  <Btn kind="accent" onClick={save} disabled={busy || !draft.name.trim() || !draft.start_date || !draft.end_date}>
+                    {busy ? "Saving…" : draft.id ? "Save changes" : "Add"}
+                  </Btn>
+                </div>
               </div>
             </div>
           </div>
@@ -292,18 +271,5 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         />
       )}
     </div>
-  );
-}
-
-function IconBtn({ children, title, onClick }: { children: React.ReactNode; title: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="grid place-items-center"
-      style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}
-    >
-      {children}
-    </button>
   );
 }

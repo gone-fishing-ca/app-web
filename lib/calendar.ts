@@ -208,12 +208,14 @@ export type PlacedBar = {
  * Itinerary items (event / drive / hotel / flight) keyed by day.
  * ------------------------------------------------------------------ */
 
-// Display order within a day: drives first, then events, hotels, flights.
-const KIND_ORDER: Record<ItineraryKind, number> = { drive: 0, event: 1, hotel: 2, flight: 3 };
+// Default display order within a day (when start times don't decide): flights
+// first, then drives, events, and hotels last — the natural travel-day sequence.
+const KIND_ORDER: Record<ItineraryKind, number> = { flight: 0, drive: 1, event: 2, hotel: 3 };
 
-/** Group itinerary items by their day, each day's list sorted by kind, then
- *  start time, then sort_order. Hotels are single-day (item_date = check-in),
- *  so they naturally show only on that day. */
+/** Group itinerary items by their day. Within a day, two items that both have
+ *  start times order by time; otherwise kind order decides (fly → drive →
+ *  event → hotel), then sort_order. Hotels are single-day (item_date =
+ *  check-in), so they naturally show only on that day. */
 export function aggregateItinerary(items: ItineraryItem[]): Map<string, ItineraryItem[]> {
   const map = new Map<string, ItineraryItem[]>();
   for (const it of items) {
@@ -224,6 +226,7 @@ export function aggregateItinerary(items: ItineraryItem[]): Map<string, Itinerar
   for (const list of map.values()) {
     list.sort(
       (a, b) =>
+        (a.start_time && b.start_time ? a.start_time.localeCompare(b.start_time) : 0) ||
         KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
         (a.start_time ?? "").localeCompare(b.start_time ?? "") ||
         a.sort_order - b.sort_order,

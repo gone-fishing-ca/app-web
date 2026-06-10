@@ -173,7 +173,7 @@ export default function LakesPage({ params }: { params: Promise<{ id: string }> 
   const available = catalog.filter((c) => !linkedIds.has(c.id));
 
   return (
-    <div className="p-7 max-w-[1000px] mx-auto">
+    <div className="p-7 max-w-[1240px] mx-auto">
       <SectionTitle right={
         !adding && (
           <Btn kind="accent" icon={Plus} onClick={() => { setAdding(true); setEditingId(null); }}>

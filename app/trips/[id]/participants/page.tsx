@@ -151,7 +151,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div className="p-7 max-w-[1180px] mx-auto">
+    <div className="p-7 max-w-[1240px] mx-auto">
       <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={startNew}>Add person</Btn>}>
         Group
       </SectionTitle>

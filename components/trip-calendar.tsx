@@ -35,6 +35,7 @@ export function TripCalendar({
   laneCount,
   onPickDay,
   onPickItem,
+  onPickSegment,
 }: {
   weeks: Day[][];
   dayFly: Map<string, DayFly>;
@@ -43,6 +44,7 @@ export function TripCalendar({
   laneCount: number;
   onPickDay: (iso: string) => void;
   onPickItem: (item: ItineraryItem) => void;
+  onPickSegment: (id: string) => void;
 }) {
   const bandH = laneCount > 0 ? laneCount * LANE_H + (laneCount - 1) * LANE_GAP : 0;
   const reserveTop = DAY_NUM_H + (bandH > 0 ? bandH + 6 : 0);
@@ -52,7 +54,7 @@ export function TripCalendar({
     <Card pad={0} className="overflow-hidden">
       <div
         className="grid"
-        style={{ gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid var(--border)" }}
+        style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))", borderBottom: "1px solid var(--border)" }}
       >
         {WEEKDAYS.map((w) => (
           <div
@@ -68,7 +70,7 @@ export function TripCalendar({
         const placed = bandH > 0 ? placeSegments(segmentBars, week.map((d) => d.iso)) : [];
         return (
           <div key={week[0].iso} className="relative">
-            <div className="grid" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
               {week.map((day, ci) => (
                 <DayCell
                   key={day.iso}
@@ -87,7 +89,7 @@ export function TripCalendar({
             {placed.length > 0 && (
               <div className="pointer-events-none absolute left-0 right-0" style={{ top: DAY_NUM_H }}>
                 {placed.map((p) => (
-                  <SegmentChip key={p.id} bar={p} />
+                  <SegmentChip key={p.id} bar={p} onClick={() => onPickSegment(p.id)} />
                 ))}
               </div>
             )}
@@ -98,13 +100,15 @@ export function TripCalendar({
   );
 }
 
-function SegmentChip({ bar }: { bar: ReturnType<typeof placeSegments>[number] }) {
+function SegmentChip({ bar, onClick }: { bar: ReturnType<typeof placeSegments>[number]; onClick: () => void }) {
   const padL = bar.roundLeft ? 2 : 0;
   const padR = bar.roundRight ? 2 : 0;
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       title={bar.name}
-      className="absolute flex items-center overflow-hidden text-[10.5px] font-semibold"
+      className="pointer-events-auto absolute flex items-center overflow-hidden text-left text-[10.5px] font-semibold transition hover:brightness-95"
       style={{
         top: bar.lane * (LANE_H + LANE_GAP),
         height: LANE_H,
@@ -123,7 +127,7 @@ function SegmentChip({ bar }: { bar: ReturnType<typeof placeSegments>[number] })
       {/* Label only on the week where the segment actually starts, so it isn't
           repeated on continuation weeks. */}
       <span className="truncate">{bar.roundLeft ? bar.name : ""}</span>
-    </div>
+    </button>
   );
 }
 
@@ -181,10 +185,11 @@ function DayCell({
       {reserveTop > DAY_NUM_H && <div aria-hidden style={{ height: reserveTop - DAY_NUM_H }} />}
 
       <div className="flex flex-col gap-1">
+        {/* Fly in/out leads the day — you leave the lake before anything else happens. */}
+        {kind && <FlyChip kind={kind} count={count} clickable={clickable} onClick={() => onPick(day.iso)} />}
         {items?.map((it) => (
           <ItemChip key={it.id} item={it} onClick={() => onPickItem(it)} />
         ))}
-        {kind && <FlyChip kind={kind} count={count} clickable={clickable} onClick={() => onPick(day.iso)} />}
       </div>
     </div>
   );

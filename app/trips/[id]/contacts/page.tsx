@@ -27,7 +27,7 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
   const outfitters = [...byId.values()];
 
   return (
-    <div className="p-7 max-w-[1000px] mx-auto">
+    <div className="p-7 max-w-[1240px] mx-auto">
       <SectionTitle>Contacts</SectionTitle>
 
       {error && (

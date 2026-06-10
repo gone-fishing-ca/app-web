@@ -68,7 +68,7 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
   const colW = 190;
 
   return (
-    <div className="p-7 max-w-[1280px] mx-auto">
+    <div className="p-7 max-w-[1240px] mx-auto">
       <SectionTitle>Lodging</SectionTitle>
       <p className="text-[13px] -mt-1 mb-4" style={{ color: "var(--text-3)" }}>
         Who’s at which lake, for which dates, in which cabin. Click a cell to assign or edit a stay.

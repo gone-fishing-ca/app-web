@@ -81,7 +81,7 @@ export default function FlightsPage({ params }: { params: Promise<{ id: string }
   }
 
   return (
-    <div className="p-7 max-w-[820px] mx-auto">
+    <div className="p-7 max-w-[1240px] mx-auto">
       <SectionTitle right={<Btn kind="accent" icon={Plus} onClick={() => setItemEditor("new")}>Add flight</Btn>}>
         Flight tracker
       </SectionTitle>
