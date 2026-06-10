@@ -5,19 +5,18 @@ import { BedDouble, ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users
 import { Avatar, Badge, Btn, Card, ComboBox, EmptyState, Field, SectionTitle, initialsOf } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
 import { api, type Cabin, type Contact, type Invitation, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
-import { fmtRange } from "@/lib/format";
+import { deriveSpan, fmtDate, fmtRange } from "@/lib/format";
 
 type Draft = {
   id?: string;
   name: string;
   cell: string;
   email: string;
-  car_group: string;
 };
 
-const EMPTY: Draft = { name: "", cell: "", email: "", car_group: "" };
+const EMPTY: Draft = { name: "", cell: "", email: "" };
 
-const COLS = "1.4fr 0.9fr 1.5fr 0.5fr 0.7fr 196px";
+const COLS = "1.4fr 0.9fr 1.5fr 0.85fr 0.85fr 196px";
 
 type EditorState = { participantId: string; participantName: string; stay: Stay | null };
 
@@ -81,7 +80,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
 
   function startNew() { setDraft({ ...EMPTY }); }
   function startEdit(p: Participant) {
-    setDraft({ id: p.id, name: p.name, cell: p.cell ?? "", email: p.email ?? "", car_group: p.car_group ?? "" });
+    setDraft({ id: p.id, name: p.name, cell: p.cell ?? "", email: p.email ?? "" });
   }
   function cancel() { setDraft(null); setError(null); }
   function toggle(id: string) {
@@ -91,7 +90,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   async function save() {
     if (!draft) return;
     setBusy(true); setError(null); setNotice(null);
-    const body = { name: draft.name, cell: draft.cell || null, email: draft.email || null, car_group: draft.car_group || null };
+    const body = { name: draft.name, cell: draft.cell || null, email: draft.email || null };
     try {
       const wasLinked = draft.id ? Boolean(items?.find((p) => p.id === draft.id)?.user_id) : false;
       let saved: Participant;
@@ -198,11 +197,12 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
           {/* header row */}
           <div className="grid items-center px-5 py-3 text-[11.5px] font-bold uppercase"
             style={{ gridTemplateColumns: COLS, letterSpacing: ".05em", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
-            <span>Name</span><span>Cell</span><span>Email</span><span>Car</span><span>Stays</span><span></span>
+            <span>Name</span><span>Cell</span><span>Email</span><span>Fly in</span><span>Fly out</span><span></span>
           </div>
 
           {items.map((p, i) => {
             const myStays = staysByParticipant.get(p.id) ?? [];
+            const [flyIn, flyOut] = deriveSpan(myStays);
             const open = expanded.has(p.id);
             const pendingInv = pendingInviteFor(p);
             return (
@@ -215,12 +215,15 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
                   </div>
                   <div className="gf-mono text-[13px]" style={{ color: "var(--text-2)" }}>{p.cell || "—"}</div>
                   <div className="text-[13px] truncate" style={{ color: "var(--text-2)" }}>{p.email || "—"}</div>
-                  <div>{p.car_group ? <Badge tone="neutral">{p.car_group}</Badge> : <span style={{ color: "var(--text-3)" }}>—</span>}</div>
                   <button onClick={() => toggle(p.id)} className="inline-flex items-center gap-1 text-[13px]"
-                    style={{ color: myStays.length ? "var(--accent-600)" : "var(--text-3)" }}>
+                    title="Show stays"
+                    style={{ color: flyIn ? "var(--accent-600)" : "var(--text-3)" }}>
                     {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    {myStays.length || "0"}
+                    {flyIn ? fmtDate(flyIn) : "—"}
                   </button>
+                  <div className="text-[13px]" style={{ color: flyOut ? "var(--text-2)" : "var(--text-3)" }}>
+                    {flyOut ? fmtDate(flyOut) : "—"}
+                  </div>
                   <div className="flex items-center justify-end gap-1">
                     {!p.user_id && p.email && (
                       <Btn kind="subtle" size="sm" icon={Send} disabled={inviting === p.id} onClick={() => invite(p)}
@@ -294,8 +297,9 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Marcus Townsend" />
-            <Field label="Car / travel group" value={draft.car_group} onChange={(e) => setDraft({ ...draft, car_group: e.target.value })} placeholder="A" />
+            <div className="col-span-2">
+              <Field label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Marcus Townsend" />
+            </div>
             <Field label="Cell" value={draft.cell} onChange={(e) => setDraft({ ...draft, cell: e.target.value })} placeholder="+1 555 555 5555" />
             <Field label="Email" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="you@example.com" />
           </div>

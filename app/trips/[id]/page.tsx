@@ -116,7 +116,7 @@ export default function TripDashboard({ params }: { params: Promise<{ id: string
                   <div className="flex-1 min-w-0">
                     <div className="text-[14px] font-semibold truncate" style={{ color: "var(--text)" }}>{p.name}</div>
                     <div className="text-[12.5px]" style={{ color: "var(--text-3)" }}>
-                      {[fmtRange(pStart, pEnd), p.car_group ? `Car ${p.car_group}` : null].filter(Boolean).join(" · ") || "No stays yet"}
+                      {fmtRange(pStart, pEnd) || "No stays yet"}
                     </div>
                   </div>
                 </div>
