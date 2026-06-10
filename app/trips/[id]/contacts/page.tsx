@@ -189,27 +189,32 @@ export default function ContactsPage({ params }: { params: Promise<{ id: string 
       )}
 
       {/* ---- Other resources ---------------------------------------------------- */}
-      <div className="flex items-end justify-between mb-3">
+      <div className="flex items-end justify-between gap-2 mb-3">
         <Eyebrow icon={MapPin} noMargin>Other resources</Eyebrow>
-        <div className="w-[300px]">
-          <ComboBox
-            value={null}
-            placeholder="Add a resource…"
-            options={unlinked.map((r) => ({ value: r.id, label: r.name, hint: r.category ?? undefined }))}
-            onSelect={linkResource}
-            onCreate={(q) => setResourceDraft({
-              name: q, category: "", contact_person: "", phone: "", alt_phone: "",
-              email: "", website: "", address: "", notes: "",
-            })}
-            createLabel={(q) => `New resource “${q}”`}
-          />
+        <div className="flex items-end gap-2">
+          {unlinked.length > 0 && (
+            <div className="w-[300px]">
+              <ComboBox
+                value={null}
+                placeholder="Add from your catalog…"
+                options={unlinked.map((r) => ({ value: r.id, label: r.name, hint: r.category ?? undefined }))}
+                onSelect={linkResource}
+                onCreate={(q) => setResourceDraft(blankResource(q))}
+                createLabel={(q) => `New resource “${q}”`}
+              />
+            </div>
+          )}
+          <Btn kind="accent" icon={Plus} onClick={() => setResourceDraft(blankResource())}>
+            New resource
+          </Btn>
         </div>
       </div>
       {tripResources === null ? (
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
       ) : tripResources.length === 0 ? (
         <EmptyState icon={ContactRound} title="No resources yet"
-          subtitle="The duty-free store, the dry-ice supplier, the bait shop on the way up — link the places this trip leans on." />
+          subtitle="The duty-free store, the dry-ice supplier, the bait shop on the way up — link the places this trip leans on."
+          action={<Btn kind="accent" icon={Plus} onClick={() => setResourceDraft(blankResource())}>Add a resource</Btn>} />
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
           {tripResources.map((r) => (
@@ -594,6 +599,13 @@ function InfoRow({
 
 function prettyUrl(u: string): string {
   return u.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+function blankResource(name = ""): ResourceDraft {
+  return {
+    name, category: "", contact_person: "", phone: "", alt_phone: "",
+    email: "", website: "", address: "", notes: "",
+  };
 }
 
 function toDraft(c: Contact): ContactDraft {
