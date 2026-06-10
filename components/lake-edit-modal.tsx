@@ -104,7 +104,7 @@ export function LakeEditModal({
       let outfitterId: string | null = null;
       if (outfitter.kind === "existing") outfitterId = outfitter.id;
       if (outfitter.kind === "new") {
-        const created = await api.post<Outfitter>(`/outfitters`, { name: outfitter.name });
+        const created = await api.post<Outfitter>(`/outfitters`, { name: outfitter.name.trim() });
         outfitterId = created.id;
       }
       await api.patch<CatalogLake>(`/lakes/${lake.id}`, {
@@ -171,13 +171,10 @@ export function LakeEditModal({
     return opts;
   })();
 
-  // ComboBox shows the selection from its options — synthesize one for a
-  // pending new outfitter so its name stays visible.
+  // "New outfitter…" is a standing option — picking it reveals a name field.
   const outfitterOptions = [
+    { value: "__new__", label: "New outfitter…" },
     ...outfitters.map((o) => ({ value: o.id, label: o.name, hint: o.contact_person ?? undefined })),
-    ...(outfitter.kind === "new"
-      ? [{ value: "__new__", label: `${outfitter.name} (new)` }]
-      : []),
   ];
 
   return (
@@ -191,7 +188,8 @@ export function LakeEditModal({
         ) : (
           <>
             <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
-            <Btn kind="accent" onClick={save} disabled={busy || !name.trim()}>
+            <Btn kind="accent" onClick={save}
+              disabled={busy || !name.trim() || (outfitter.kind === "new" && !outfitter.name.trim())}>
               {busy ? "Saving…" : "Save"}
             </Btn>
           </>
@@ -238,17 +236,28 @@ export function LakeEditModal({
       ) : (
         <div className="flex flex-col gap-4">
           <Field label="Lake name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Whitefish Lake" />
-          <div>
+          <div className="flex flex-col gap-3">
             <ComboBox
               label="Outfitter"
               value={outfitter.kind === "existing" ? outfitter.id : outfitter.kind === "new" ? "__new__" : null}
               options={outfitterOptions}
               placeholder="Choose an outfitter…"
-              onSelect={(v) => { if (v !== "__new__") setOutfitter({ kind: "existing", id: v }); }}
+              onSelect={(v) => setOutfitter(v === "__new__"
+                ? { kind: "new", name: outfitter.kind === "new" ? outfitter.name : "" }
+                : { kind: "existing", id: v })}
               onCreate={(q) => setOutfitter({ kind: "new", name: q })}
               createLabel={(q) => `Create new outfitter “${q}”`}
             />
-            <div className="text-[12px] mt-1.5" style={{ color: "var(--text-3)" }}>
+            {outfitter.kind === "new" && (
+              <Field
+                label="New outfitter name"
+                autoFocus
+                value={outfitter.name}
+                onChange={(e) => setOutfitter({ kind: "new", name: e.target.value })}
+                placeholder="Mattice Lake Outfitters"
+              />
+            )}
+            <div className="text-[12px] -mt-1" style={{ color: "var(--text-3)" }}>
               Phone, email, and other outfitter details live on the Contacts page.
             </div>
           </div>
