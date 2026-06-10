@@ -112,6 +112,16 @@ export default function TripLayout({
       .catch(() => setNotFound(true));
   }, [authLoading, user, router, tripId]);
 
+  // The Overview page's edit modal broadcasts trip changes — keep the header in sync.
+  useEffect(() => {
+    function onTripUpdated(e: Event) {
+      const updated = (e as CustomEvent<Trip>).detail;
+      if (updated?.id === tripId) setTrip(updated);
+    }
+    window.addEventListener("gf:trip-updated", onTripUpdated);
+    return () => window.removeEventListener("gf:trip-updated", onTripUpdated);
+  }, [tripId]);
+
   if (authLoading || !user) return null;
   if (notFound) {
     return (
