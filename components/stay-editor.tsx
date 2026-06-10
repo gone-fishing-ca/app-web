@@ -64,7 +64,7 @@ export function StayEditor({
     } catch (e) {
       const status = e && typeof e === "object" && "status" in e ? (e as { status?: number }).status : undefined;
       if (status === 409) {
-        setError("This person already has a stay at this lake — edit that one instead.");
+        setError("This person is already at this lake — edit that entry instead.");
       } else {
         setError(e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : "Save failed");
       }
@@ -75,7 +75,7 @@ export function StayEditor({
 
   async function del() {
     if (!stay) return;
-    if (!confirm("Remove this stay?")) return;
+    if (!confirm("Remove this lake assignment?")) return;
     setBusy(true); setError(null);
     try {
       await api.del(`/trips/${tripId}/stays/${stay.id}`);
@@ -96,7 +96,7 @@ export function StayEditor({
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
           <div>
             <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
-              {stay ? "Edit stay" : "Add stay"}
+              {stay ? "Edit lake & dates" : "Add lake & dates"}
             </div>
             {participantName && <div className="text-[12.5px]" style={{ color: "var(--text-3)" }}>{participantName}</div>}
           </div>
@@ -179,7 +179,7 @@ export function StayEditor({
           <div>{stay && onDeleted && <Btn kind="danger" onClick={del} disabled={busy}>Remove</Btn>}</div>
           <div className="flex gap-2">
             <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
-            <Btn kind="accent" onClick={save} disabled={busy || !lakeId}>{busy ? "Saving…" : stay ? "Save" : "Add stay"}</Btn>
+            <Btn kind="accent" onClick={save} disabled={busy || !lakeId}>{busy ? "Saving…" : stay ? "Save" : "Add"}</Btn>
           </div>
         </div>
       </div>

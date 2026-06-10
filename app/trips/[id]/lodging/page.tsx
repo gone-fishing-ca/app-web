@@ -82,11 +82,11 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
       ) : lakes.length === 0 ? (
         <EmptyState icon={BedDouble} title="No lakes yet"
-          subtitle="Add at least one lake before assigning stays."
+          subtitle="Add at least one lake first."
           action={<Link href={`/trips/${tripId}/lakes`} className="text-[14px] font-semibold" style={{ color: "var(--accent-600)" }}>Go to Lakes &amp; cabins →</Link>} />
       ) : participants.length === 0 ? (
         <EmptyState icon={BedDouble} title="No one in the group yet"
-          subtitle="Add people to the group, then assign their lake stays here."
+          subtitle="Add people to the group, then assign their lakes &amp; dates here."
           action={<Link href={`/trips/${tripId}/participants`} className="text-[14px] font-semibold" style={{ color: "var(--accent-600)" }}>Go to Group →</Link>} />
       ) : (
         <Card pad={0} className="overflow-x-auto">
@@ -130,7 +130,7 @@ export default function LodgingPage({ params }: { params: Promise<{ id: string }
                       ) : (
                         <button onClick={() => setEditor({ participantId: p.id, participantName: p.name, lakeId: l.id, stay: null })}
                           className="w-full grid place-items-center rounded-[10px] py-2.5 transition hover:brightness-95"
-                          style={{ border: "1px dashed var(--border-strong)", color: "var(--text-3)" }} title="Add stay">
+                          style={{ border: "1px dashed var(--border-strong)", color: "var(--text-3)" }} title="Add lake & dates">
                           <Plus size={15} />
                         </button>
                       )}

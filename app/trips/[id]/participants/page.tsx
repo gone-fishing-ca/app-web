@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { BedDouble, ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
 import { Avatar, Badge, Btn, Card, ComboBox, EmptyState, Field, SectionTitle, initialsOf } from "@/components/ui";
 import { StayEditor } from "@/components/stay-editor";
 import { api, type Cabin, type Contact, type Invitation, type TripLake, type Participant, type Segment, type Stay } from "@/lib/api";
@@ -216,7 +216,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
                   <div className="gf-mono text-[13px]" style={{ color: "var(--text-2)" }}>{p.cell || "—"}</div>
                   <div className="text-[13px] truncate" style={{ color: "var(--text-2)" }}>{p.email || "—"}</div>
                   <button onClick={() => toggle(p.id)} className="inline-flex items-center gap-1 text-[13px]"
-                    title="Show stays"
+                    title="Show lake, dates & cabin"
                     style={{ color: flyIn ? "var(--accent-600)" : "var(--text-3)" }}>
                     {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     {flyIn ? fmtDate(flyIn) : "—"}
@@ -237,32 +237,23 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
                 </div>
 
                 {open && (
-                  <div className="px-5 pb-4 pt-1" style={{ background: "var(--surface-2)" }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-[11.5px] font-bold uppercase inline-flex items-center gap-1.5"
-                        style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
-                        <BedDouble size={14} /> Stays
-                      </div>
-                      <Btn kind="subtle" size="sm" icon={Plus}
-                        disabled={lakes.length === 0}
-                        onClick={() => setEditor({ participantId: p.id, participantName: p.name, stay: null })}>
-                        Add stay
-                      </Btn>
-                    </div>
+                  <div className="px-5 pb-3 pt-1" style={{ background: "var(--surface-2)" }}>
                     {lakes.length === 0 ? (
-                      <div className="text-[13px]" style={{ color: "var(--text-3)" }}>Add a lake first to assign stays.</div>
-                    ) : myStays.length === 0 ? (
-                      <div className="text-[13px]" style={{ color: "var(--text-3)" }}>Not staying anywhere yet.</div>
+                      <div className="text-[13px] py-1" style={{ color: "var(--text-3)" }}>Add a lake to the trip first.</div>
                     ) : (
-                      <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         {myStays.map((s) => (
                           <button key={s.id} onClick={() => setEditor({ participantId: p.id, participantName: p.name, stay: s })}
-                            className="flex items-center justify-between gap-3 text-left rounded-[10px] px-3 py-2 transition hover:brightness-95"
+                            className="inline-flex items-center gap-2 text-left rounded-[10px] px-3 py-1.5 transition hover:brightness-95"
                             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-                            <span className="text-[13.5px]" style={{ color: "var(--text)" }}>{stayChip(s)}</span>
-                            <Pencil size={13} style={{ color: "var(--text-3)" }} />
+                            <span className="text-[13px]" style={{ color: "var(--text)" }}>{stayChip(s)}</span>
+                            <Pencil size={12} style={{ color: "var(--text-3)" }} />
                           </button>
                         ))}
+                        <Btn kind="subtle" size="sm" icon={Plus}
+                          onClick={() => setEditor({ participantId: p.id, participantName: p.name, stay: null })}>
+                          {myStays.length ? "Add" : "Add lake & dates"}
+                        </Btn>
                       </div>
                     )}
                   </div>
@@ -304,7 +295,7 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
             <Field label="Email" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="you@example.com" />
           </div>
           <div className="text-[12px] mt-3" style={{ color: "var(--text-3)" }}>
-            Assign lake stays &amp; dates per person here, or all at once in <span style={{ color: "var(--text-2)" }}>Lodging</span>.
+            Assign lakes &amp; dates per person here, or all at once in <span style={{ color: "var(--text-2)" }}>Lodging</span>.
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Btn kind="ghost" onClick={cancel}>Cancel</Btn>
