@@ -19,7 +19,7 @@ type Draft = {
 const EMPTY: Omit<Draft, "segs"> = { name: "", cell: "", email: "" };
 
 // Desktop table columns; below lg the rows wrap into stacked card-style rows.
-const COLS = "lg:[grid-template-columns:1.4fr_0.9fr_1.5fr_0.85fr_0.85fr_196px]";
+const COLS = "lg:[grid-template-columns:1.4fr_0.9fr_1.4fr_1.8fr_196px]";
 
 type EditorState = { participantId: string; participantName: string; stay: Stay | null };
 
@@ -193,6 +193,19 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
   }
   function dropStay(id: string) { setStays((prev) => prev.filter((s) => s.id !== id)); }
 
+  /** Attendance summary for the row badge: which weeks (multi-week trips), or
+   *  "Custom" when any stay overrides its week's dates. Null = nothing notable
+   *  (no stays, or a single-week trip on the default dates). */
+  function attendanceBadge(myStays: Stay[]): string | null {
+    if (myStays.length === 0) return null;
+    if (myStays.some((s) => s.start_date || s.end_date)) return "Custom";
+    if (segments.length <= 1) return null;
+    if (myStays.length === segments.length) return segments.length === 2 ? "Both Weeks" : "All weeks";
+    const attended = new Set(myStays.map((s) => s.segment_id));
+    const names = segments.filter((g) => attended.has(g.id)).map((g) => g.name);
+    return names.length <= 2 ? names.join(" + ") : `${names.length} weeks`;
+  }
+
   function stayChip(s: Stay): string {
     const seg = segMap.get(s.segment_id);
     const lake = seg?.lake_id ? lakeMap.get(seg.lake_id) : null;
@@ -230,12 +243,13 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
           {/* header row (desktop only — mobile rows are self-labelled) */}
           <div className={`hidden lg:grid items-center px-5 py-3 text-[11.5px] font-bold uppercase ${COLS}`}
             style={{ letterSpacing: ".05em", color: "var(--text-3)", borderBottom: "1px solid var(--border)" }}>
-            <span>Name</span><span>Cell</span><span>Email</span><span>Fly in</span><span>Fly out</span><span></span>
+            <span>Name</span><span>Cell</span><span>Email</span><span>Fly in – Fly out</span><span></span>
           </div>
 
           {items.map((p, i) => {
             const myStays = staysByParticipant.get(p.id) ?? [];
             const [flyIn, flyOut] = deriveSpan(myStays.map(effectiveDates));
+            const badge = attendanceBadge(myStays);
             const open = expanded.has(p.id);
             const pendingInv = pendingInviteFor(p);
             return (
@@ -248,17 +262,16 @@ export default function ParticipantsPage({ params }: { params: Promise<{ id: str
                   </div>
                   <div className={`order-3 lg:order-none gf-mono text-[13px] ${p.cell ? "" : "hidden lg:block"}`} style={{ color: "var(--text-2)" }}>{p.cell || "—"}</div>
                   <div className={`order-4 lg:order-none min-w-0 text-[13px] truncate ${p.email ? "" : "hidden lg:block"}`} style={{ color: "var(--text-2)" }}>{p.email || "—"}</div>
-                  <button onClick={() => toggle(p.id)} className="order-5 lg:order-none inline-flex items-center gap-1 text-[13px]"
-                    title="Show lake, dates & cabin"
-                    style={{ color: flyIn ? "var(--accent-600)" : "var(--text-3)" }}>
-                    {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <span className="lg:hidden font-semibold" style={{ color: "var(--text-3)" }}>In</span>
-                    {flyIn ? fmtDate(flyIn) : "—"}
+                  <button onClick={() => toggle(p.id)} className="order-5 lg:order-none inline-flex items-center gap-1.5 text-[13px] min-w-0"
+                    title="Show weeks, dates & cabin"
+                    style={{ color: flyIn || flyOut ? "var(--accent-600)" : "var(--text-3)" }}>
+                    {open ? <ChevronDown size={14} className="flex-none" /> : <ChevronRight size={14} className="flex-none" />}
+                    {/* Year-less range — the trip header already carries the year. */}
+                    <span className="truncate">
+                      {flyIn || flyOut ? [fmtDate(flyIn), fmtDate(flyOut)].filter(Boolean).join(" – ") : "Dates TBD"}
+                    </span>
+                    {badge && <Badge tone={badge === "Custom" ? "accent" : "neutral"}>{badge}</Badge>}
                   </button>
-                  <div className="order-6 lg:order-none text-[13px]" style={{ color: flyOut ? "var(--text-2)" : "var(--text-3)" }}>
-                    <span className="lg:hidden font-semibold" style={{ color: "var(--text-3)" }}>Out </span>
-                    {flyOut ? fmtDate(flyOut) : "—"}
-                  </div>
                   <div className="order-2 lg:order-none flex items-center justify-end gap-1">
                     {!p.user_id && p.email && (
                       <Btn kind="subtle" size="sm" icon={Send} disabled={inviting === p.id} onClick={() => invite(p)}
