@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import { Btn } from "@/components/ui";
-import { ADD_MENU_KINDS, ADDABLE_META, type AddableKind } from "@/components/itinerary-kit";
+import { ADD_MENU_KINDS, KIND_META } from "@/components/itinerary-kit";
+import type { ItineraryKind } from "@/lib/api";
 
-/** "Add" button + dropdown of itinerary kinds (plus "week"). Selecting one
- *  opens the matching editor in create mode. Built on the open/click-outside
+/** "Add" button + dropdown of itinerary kinds. Selecting one opens the
+ *  matching editor in create mode. Built on the open/click-outside
  *  pattern from ComboBox. */
-export function AddMenu({ onPick }: { onPick: (kind: AddableKind) => void }) {
+export function AddMenu({ onPick }: { onPick: (kind: ItineraryKind) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -32,7 +33,7 @@ export function AddMenu({ onPick }: { onPick: (kind: AddableKind) => void }) {
           style={{ background: "var(--surface)", border: "1px solid var(--border-strong)" }}
         >
           {ADD_MENU_KINDS.map((k) => {
-            const m = ADDABLE_META[k];
+            const m = KIND_META[k];
             return (
               <button
                 key={k}

@@ -6,6 +6,7 @@ import { Btn, EmptyState, Field, ModalShell, SectionTitle } from "@/components/u
 import { TripCalendar, DayDetailModal } from "@/components/trip-calendar";
 import { AddMenu } from "@/components/add-menu";
 import { ItineraryItemEditor } from "@/components/itinerary-editor";
+import { ItineraryList } from "@/components/itinerary-list";
 import {
   api,
   type ItineraryItem,
@@ -20,8 +21,7 @@ import { aggregateFlyEvents, aggregateItinerary, buildWeeks, packSegments, sched
 // Editor target: creating a new item of a kind, or editing an existing one.
 type EditorState = { mode: "create"; kind: ItineraryKind } | { mode: "edit"; item: ItineraryItem };
 
-type Draft = { id?: string; name: string; lake_id: string; start_date: string; end_date: string };
-const EMPTY: Draft = { name: "", lake_id: "", start_date: "", end_date: "" };
+type Draft = { id: string; name: string; lake_id: string; start_date: string; end_date: string };
 
 function msg(e: unknown, fallback: string) {
   return e && typeof e === "object" && "message" in e ? String((e as { message?: string }).message) : fallback;
@@ -38,7 +38,8 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
 
-  // Week (segment) create/edit modal — weeks live on the calendar itself.
+  // Week (segment) edit modal — weeks are created with the trip; clicking a
+  // segment bar on the calendar opens this.
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,10 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   }, [tripId]);
 
   const dayItems = useMemo(() => aggregateItinerary(items), [items]);
+  const itineraryDays = useMemo(
+    () => Array.from(dayItems.entries()).sort(([a], [b]) => a.localeCompare(b)),
+    [dayItems],
+  );
 
   const { spanStart, spanEnd, gridStart, gridEnd } = useMemo(
     () => scheduleRange(stays, tripLakes, items.map((it) => it.item_date)),
@@ -97,18 +102,10 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
       end_date: draft.end_date || null,
     };
     try {
-      if (draft.id) {
-        const updated = await api.patch<Segment>(`/trips/${tripId}/segments/${draft.id}`, body);
-        setSegments((prev) => prev?.map((s) => (s.id === updated.id ? updated : s)) ?? null);
-        // Changing a week's dates/lake ripples into adopting stays — refetch.
-        api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
-      } else {
-        const created = await api.post<Segment>(`/trips/${tripId}/segments`, {
-          ...body,
-          sort_order: segments?.length ?? 0,
-        });
-        setSegments((prev) => (prev ? [...prev, created] : [created]));
-      }
+      const updated = await api.patch<Segment>(`/trips/${tripId}/segments/${draft.id}`, body);
+      setSegments((prev) => prev?.map((s) => (s.id === updated.id ? updated : s)) ?? null);
+      // Changing a week's dates/lake ripples into adopting stays — refetch.
+      api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
       setDraft(null);
     } catch (e) {
       setError(msg(e, "Save failed"));
@@ -158,13 +155,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   return (
     <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
       <SectionTitle
-        right={
-          <AddMenu
-            onPick={(kind) =>
-              kind === "week" ? setDraft({ ...EMPTY }) : setEditor({ mode: "create", kind })
-            }
-          />
-        }
+        right={<AddMenu onPick={(kind) => setEditor({ mode: "create", kind })} />}
       >
         Schedule
       </SectionTitle>
@@ -188,33 +179,49 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
           subtitle="Add lakes with fly-in/out dates, assign stays, or add an itinerary item, and the trip calendar will fill in here."
         />
       ) : (
-        <TripCalendar
-          weeks={weeks}
-          dayFly={dayFly}
-          dayItems={dayItems}
-          segmentBars={segmentBars}
-          laneCount={laneCount}
-          onPickDay={setSelectedDay}
-          onPickItem={(item) => setEditor({ mode: "edit", item })}
-          onPickSegment={editWeek}
-        />
+        <>
+          <TripCalendar
+            weeks={weeks}
+            dayFly={dayFly}
+            dayItems={dayItems}
+            segmentBars={segmentBars}
+            laneCount={laneCount}
+            onPickDay={setSelectedDay}
+            onPickItem={(item) => setEditor({ mode: "edit", item })}
+            onPickSegment={editWeek}
+          />
+
+          {/* ---- Itinerary — the same items, day by day ---- */}
+          <div className="mt-8">
+            <SectionTitle>Itinerary</SectionTitle>
+            {itineraryDays.length === 0 ? (
+              <div className="text-[13.5px]" style={{ color: "var(--text-3)" }}>
+                No itinerary items yet — use Add to put events, drives, hotels, and flights on the plan.
+              </div>
+            ) : (
+              <ItineraryList
+                days={itineraryDays}
+                participants={participants}
+                onPickItem={(item) => setEditor({ mode: "edit", item })}
+              />
+            )}
+          </div>
+        </>
       )}
 
       {draft && (
         <ModalShell
-          title={draft.id ? "Edit week" : "New week"}
+          title="Edit week"
           onClose={() => setDraft(null)}
           maxWidth={460}
           footer={
             <>
-              {draft.id && (
-                <Btn kind="ghost" className="mr-auto" onClick={() => remove(draft.id!)} disabled={busy}>Delete</Btn>
-              )}
+              <Btn kind="ghost" className="mr-auto" onClick={() => remove(draft.id)} disabled={busy}>Delete</Btn>
               <Btn kind="ghost" onClick={() => setDraft(null)}>Cancel</Btn>
               {/* Dates are required — the calendar is the only place weeks show,
                   and an undated week would be invisible and unreachable. */}
               <Btn kind="accent" onClick={save} disabled={busy || !draft.name.trim() || !draft.start_date || !draft.end_date}>
-                {busy ? "Saving…" : draft.id ? "Save changes" : "Add"}
+                {busy ? "Saving…" : "Save changes"}
               </Btn>
             </>
           }

@@ -1,4 +1,4 @@
-import { BedDouble, CalendarClock, CalendarRange, Car, Plane, type LucideIcon } from "lucide-react";
+import { BedDouble, CalendarClock, Car, Plane, type LucideIcon } from "lucide-react";
 import type { ItineraryKind } from "@/lib/api";
 
 type KindMeta = { label: string; Icon: LucideIcon; bg: string; fg: string };
@@ -13,14 +13,6 @@ export const KIND_META: Record<ItineraryKind, KindMeta> = {
   flight: { label: "Flight", Icon: Plane, bg: "var(--success-bg)", fg: "var(--success)" },
 };
 
-/** Everything the Add menu can create: itinerary items plus "week" (a Segment,
- *  drawn as a multi-day bar at the top of the calendar, not an ItineraryItem). */
-export type AddableKind = ItineraryKind | "week";
-
-export const ADDABLE_META: Record<AddableKind, KindMeta> = {
-  ...KIND_META,
-  week: { label: "Week", Icon: CalendarRange, bg: "var(--surface-2)", fg: "var(--text-2)" },
-};
-
-// Order shown in the Add dropdown.
-export const ADD_MENU_KINDS: AddableKind[] = ["event", "drive", "hotel", "flight", "week"];
+// Order shown in the Add dropdown. Weeks aren't addable here — they're created
+// with the trip; the calendar's segment bars still open the edit modal.
+export const ADD_MENU_KINDS: ItineraryKind[] = ["event", "drive", "hotel", "flight"];
