@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Btn, ComboBox, Field, ModalShell } from "@/components/ui";
 import { api, type FlightLeg, type FlightLookupLeg, type ItineraryItem, type Participant } from "@/lib/api";
@@ -16,6 +16,7 @@ const AIRLINES = [
 ];
 const OTHER = "OTHER";
 const UNLINKED = "none";
+const NEW_ITEM = "__new__"; // create the suggested milestone on save
 
 function splitFlightNumber(fn: string | null | undefined): { code: string | null; num: string } {
   const m = /^\s*([A-Za-z]{2})\s*(\d{1,4}[A-Za-z]?)\s*$/.exec(fn ?? "");
@@ -28,15 +29,22 @@ function splitFlightNumber(fn: string | null | undefined): { code: string | null
 /** Create/edit modal for one person's flight leg. Opened from the Flights page
  *  (link to a Schedule flight is optional) or from inside a flight item's
  *  editor (item locked). Airline + number + date can auto-fill the airports and
- *  times via the API's schedule lookup (AeroDataBox). */
+ *  times via the API's schedule lookup (AeroDataBox).
+ *
+ *  The Schedule-milestone link suggests itself from the form: arrivals (before
+ *  the first week ends) propose "Fly to {destination}", departures propose
+ *  "Fly from {origin}". If a same-named milestone already exists on that date
+ *  it's pre-selected; otherwise saving creates the milestone first. */
 export function FlightLegEditor({
   tripId,
   participants,
   flightItems,
   lockedItemId,
   initialParticipantId,
+  firstSegmentEnd,
   leg,
   onSaved,
+  onItemCreated,
   onDeleted,
   onClose,
 }: {
@@ -45,8 +53,10 @@ export function FlightLegEditor({
   flightItems: ItineraryItem[]; // kind === "flight" only
   lockedItemId?: string; // when opened from inside that item's editor
   initialParticipantId?: string; // pre-pick the person (per-person add button)
+  firstSegmentEnd?: string | null; // first week's end date — legs on/after it are departures
   leg: FlightLeg | null; // null = creating
   onSaved: (l: FlightLeg) => void;
+  onItemCreated?: (item: ItineraryItem) => void; // a milestone was created on save
   onDeleted?: (id: string) => void;
   onClose: () => void;
 }) {
@@ -70,6 +80,10 @@ export function FlightLegEditor({
   const [lookupNote, setLookupNote] = useState<string | null>(null);
   const [lookupResults, setLookupResults] = useState<FlightLookupLeg[] | null>(null);
 
+  // Once the user touches the link dropdown (or we're editing / item-locked),
+  // stop auto-updating it from the form.
+  const [linkTouched, setLinkTouched] = useState(Boolean(leg) || Boolean(lockedItemId));
+
   const itemLocked = Boolean(lockedItemId);
   const personLocked = Boolean(leg); // the API doesn't support moving a leg between people
   const fullFlightNumber =
@@ -78,7 +92,23 @@ export function FlightLegEditor({
         ? `${airline}${flightNum.trim().toUpperCase()}`
         : ""
       : rawFlight.replace(/\s+/g, "").toUpperCase();
-  const canSave = Boolean(participantId);
+
+  // Suggested milestone: arrivals are "Fly to {dest}", and once the first week
+  // is over you're flying home — "Fly from {origin}".
+  const isDeparture = Boolean(legDate && firstSegmentEnd && legDate >= firstSegmentEnd);
+  const suggestedAirport = isDeparture ? origin : destination;
+  const suggestedTitle =
+    legDate && suggestedAirport ? `Fly ${isDeparture ? "from" : "to"} ${suggestedAirport}` : null;
+  const suggestedMatch = suggestedTitle
+    ? flightItems.find((it) => it.title === suggestedTitle && it.item_date === legDate)
+    : undefined;
+
+  useEffect(() => {
+    if (linkTouched) return;
+    setItemId(suggestedMatch?.id ?? (suggestedTitle ? NEW_ITEM : ""));
+  }, [linkTouched, suggestedTitle, suggestedMatch?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const canSave = Boolean(participantId) && !(itemId === NEW_ITEM && !suggestedTitle);
   const canLookup = Boolean(fullFlightNumber) && Boolean(legDate) && !lookupBusy;
 
   async function lookup() {
@@ -112,8 +142,35 @@ export function FlightLegEditor({
   async function save() {
     setBusy(true);
     setError(null);
+    let linkId = itemId === NEW_ITEM ? "" : itemId;
+    try {
+      if (itemId === NEW_ITEM && suggestedTitle) {
+        // The suggested milestone may have appeared since (someone else's leg
+        // saved first) — reuse it instead of creating a duplicate.
+        const created =
+          suggestedMatch ??
+          (await api.post<ItineraryItem>(`/trips/${tripId}/itinerary`, {
+            kind: "flight",
+            title: suggestedTitle,
+            item_date: legDate,
+            start_time: null,
+            end_time: null,
+            location: isDeparture ? origin || null : null,
+            end_location: isDeparture ? null : destination || null,
+            description: null,
+            confirmation_code: null,
+            participant_ids: [],
+          }));
+        if (!suggestedMatch) onItemCreated?.(created);
+        linkId = created.id;
+      }
+    } catch (e) {
+      setError(msg(e, "Couldn't create the Schedule milestone"));
+      setBusy(false);
+      return;
+    }
     const body = {
-      itinerary_item_id: itemId || null,
+      itinerary_item_id: linkId || null,
       leg_date: legDate || null, // with a linked flight, the API defaults to its date
       flight_number: fullFlightNumber || null,
       origin_airport: origin || null,
@@ -254,13 +311,19 @@ export function FlightLegEditor({
 
           {!itemLocked && (
             <ComboBox
-              label="Schedule flight (optional)"
+              label="Schedule milestone (optional)"
               value={itemId || UNLINKED}
               options={[
                 { value: UNLINKED, label: "Not linked" },
+                ...(suggestedTitle && !suggestedMatch
+                  ? [{ value: NEW_ITEM, label: `New: ${suggestedTitle}`, hint: legDate }]
+                  : []),
                 ...flightItems.map((it) => ({ value: it.id, label: it.title, hint: it.item_date })),
               ]}
-              onSelect={(v) => setItemId(v === UNLINKED ? "" : v)}
+              onSelect={(v) => {
+                setLinkTouched(true);
+                setItemId(v === UNLINKED ? "" : v);
+              }}
             />
           )}
 

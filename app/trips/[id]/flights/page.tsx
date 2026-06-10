@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { CalendarRange, PlaneTakeoff, Plus } from "lucide-react";
 import { Btn, Card, EmptyState, SectionTitle } from "@/components/ui";
 import { FlightLegEditor } from "@/components/flight-leg-editor";
-import { api, type FlightLeg, type ItineraryItem, type Participant } from "@/lib/api";
+import { api, type FlightLeg, type ItineraryItem, type Participant, type Segment } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 
 /** Everyone's actual flights, grouped by person — the app's version of the
@@ -16,6 +16,7 @@ export default function FlightsPage({ params }: { params: Promise<{ id: string }
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [items, setItems] = useState<ItineraryItem[]>([]); // flight milestones, for the link picker + chips
   const [legs, setLegs] = useState<FlightLeg[] | null>(null);
+  const [segments, setSegments] = useState<Segment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [legEditor, setLegEditor] = useState<{ leg: FlightLeg | null; participantId?: string } | null>(null);
@@ -25,14 +26,25 @@ export default function FlightsPage({ params }: { params: Promise<{ id: string }
       api.get<Participant[]>(`/trips/${tripId}/participants`),
       api.get<ItineraryItem[]>(`/trips/${tripId}/itinerary`),
       api.get<FlightLeg[]>(`/trips/${tripId}/flights`),
+      api.get<Segment[]>(`/trips/${tripId}/segments`),
     ])
-      .then(([p, it, l]) => {
+      .then(([p, it, l, s]) => {
         setParticipants(p);
         setItems(it.filter((i) => i.kind === "flight"));
         setLegs(l);
+        setSegments(s);
       })
       .catch((e) => setError(msg(e, "Load failed")));
   }, [tripId]);
+
+  // First week's end date — a flight on/after it is a departure ("Fly from …"),
+  // anything earlier is an arrival ("Fly to …"). Drives the editor's milestone suggestion.
+  const firstSegmentEnd = useMemo(() => {
+    const dated = segments
+      .filter((s) => s.end_date)
+      .sort((a, b) => a.sort_order - b.sort_order || (a.start_date ?? "").localeCompare(b.start_date ?? ""));
+    return dated[0]?.end_date ?? null;
+  }, [segments]);
 
   const itemById = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
   const legsByParticipant = useMemo(() => {
@@ -167,8 +179,10 @@ export default function FlightsPage({ params }: { params: Promise<{ id: string }
           participants={participants}
           flightItems={items}
           initialParticipantId={legEditor.participantId}
+          firstSegmentEnd={firstSegmentEnd}
           leg={legEditor.leg}
           onSaved={onLegSaved}
+          onItemCreated={(it) => setItems((prev) => [...prev, it])}
           onDeleted={(id) => setLegs((prev) => (prev ?? []).filter((l) => l.id !== id))}
           onClose={() => setLegEditor(null)}
         />
