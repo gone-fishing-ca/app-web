@@ -111,7 +111,13 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [] 
         <Field label="Qty" type="number" value={draft.qty} onChange={(e) => setDraft({ ...draft, qty: e.target.value })} placeholder="1" />
         <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="oz / lbs / —" />
         <SelectField label="Per" value={draft.basis} onChange={(v) => setDraft({ ...draft, basis: v as QtyBasis })}
-          options={[["per_person", "Person"], ["per_cabin", "Cabin"], ["per_boat", "Boat (2 people)"], ["per_group", "Group"]]} />
+          options={[
+            ["per_person", "Person (everyone)"],
+            ["per_person_peak", "Person, peak week (handed off)"],
+            ["per_cabin", "Cabin"],
+            ["per_boat", "Boat (2 people)"],
+            ["per_group", "Group"],
+          ]} />
         <SelectField label="Over" value={draft.period} onChange={(v) => setDraft({ ...draft, period: v as QtyPeriod })}
           options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
       </div>

@@ -1,13 +1,15 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { Backpack, Home, Luggage } from "lucide-react";
+import { Backpack, Home, Luggage, Tag } from "lucide-react";
 import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
 import {
   api,
   type PackLine,
   type PackPerson,
+  type PackUnit,
   type Participant,
+  type Segment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { effectiveSource, hintLabel, personRow } from "@/lib/packing";
@@ -23,12 +25,14 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
   const { user } = useAuth();
   const [lines, setLines] = useState<PackLine[] | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [segments, setSegments] = useState<Segment[]>([]);
   const [selected, setSelected] = useState<string | "">("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.get<PackLine[]>(`/trips/${tripId}/pack`).then(setLines).catch((e) => setError(errMsg(e, "Load failed")));
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setParticipants).catch(() => {});
+    api.get<Segment[]>(`/trips/${tripId}/segments`).then(setSegments).catch(() => {});
   }, [tripId]);
 
   // Default to the signed-in user's roster row; organizers can view anyone's.
@@ -39,18 +43,30 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
   const participantId = selected || me?.id || participants[0]?.id || "";
   const participant = participants.find((p) => p.id === participantId) ?? null;
 
-  const { bring, stored, shared } = useMemo(() => {
+  const { bring, stored, shared, assignedUnits } = useMemo(() => {
+    // Itemized lines speak through their unit assignments instead of the
+    // generic everyone-gets-one rows.
     const personal = (lines ?? []).filter(
-      (l) => l.responsibility === "personal" || l.responsibility === "personal_stored",
+      (l) => (l.responsibility === "personal" || l.responsibility === "personal_stored") && l.units.length === 0,
     );
+    const assigned: { line: PackLine; unit: PackUnit; segmentIds: string[] }[] = [];
+    for (const l of lines ?? []) {
+      for (const u of l.units) {
+        const mine = u.assignments.filter((a) => a.participant_id === participantId);
+        if (mine.length > 0) assigned.push({ line: l, unit: u, segmentIds: mine.map((a) => a.segment_id) });
+      }
+    }
     return {
       bring: personal.filter((l) => participantId && effectiveSource(l, participantId) === "self"),
       stored: personal.filter((l) => participantId && effectiveSource(l, participantId) === "stored"),
       shared: (lines ?? []).filter(
         (l) => l.responsibility === "shared" && l.assignee_participant_id === participantId,
       ),
+      assignedUnits: assigned,
     };
   }, [lines, participantId]);
+
+  const segName = useMemo(() => new Map(segments.map((s) => [s.id, s.name])), [segments]);
 
   async function setPerson(line: PackLine, body: { packed?: boolean; source?: "self" | "stored" | null }) {
     if (!participantId) return;
@@ -175,7 +191,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
 
       {lines === null ? (
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
-      ) : bring.length + stored.length + shared.length === 0 ? (
+      ) : bring.length + stored.length + shared.length + assignedUnits.length === 0 ? (
         <EmptyState icon={Backpack} title="Nothing assigned yet"
           subtitle="Personal items and shared items assigned to this person will show up here as the Packing list comes together." />
       ) : (
@@ -184,6 +200,41 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
             subtitle="Pack these yourself — they fly with you." list={bring} />
           <Section icon={Home} title="Stored at HQ for you" flip="self"
             subtitle="Already in the Chicago closet — the organizer brings these up." list={stored} />
+          {assignedUnits.length > 0 && (
+            <Card>
+              <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5">
+                <Tag size={18} strokeWidth={1.9} style={{ color: "var(--accent-600)" }} />
+                <div className="flex-1 min-w-0">
+                  <div style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: "var(--display-weight)" as unknown as number,
+                    letterSpacing: "var(--display-tracking)",
+                    fontSize: 16.5, color: "var(--text)",
+                  }}>
+                    Gear assigned to you
+                  </div>
+                  <div className="text-[12px]" style={{ color: "var(--text-3)" }}>
+                    Specific units with your name on them — packed with the group gear.
+                  </div>
+                </div>
+                <Badge tone="neutral">{assignedUnits.length}</Badge>
+              </div>
+              {assignedUnits.map(({ line, unit, segmentIds }) => (
+                <div key={unit.id} className="flex items-center gap-3 px-4 sm:px-5 py-2.5"
+                  style={{ borderTop: "1px solid var(--border)" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>
+                      {line.item.name}{unit.label ? ` — ${unit.label}` : ""}
+                    </div>
+                    <div className="truncate text-[12px]" style={{ color: "var(--text-3)" }}>
+                      {segmentIds.map((id) => segName.get(id) ?? "Week").join(" · ")}
+                    </div>
+                  </div>
+                  <Badge tone="neutral">{line.item.item_type}</Badge>
+                </div>
+              ))}
+            </Card>
+          )}
           <Section icon={Backpack} title="Group gear you're on the hook for"
             subtitle="Shared items assigned to you on the Packing page." list={shared} />
         </div>

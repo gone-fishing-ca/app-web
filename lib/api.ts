@@ -268,7 +268,7 @@ export type FlightLookupLeg = {
 /* ---- Inventory & packing (mirrors api/src/schemas.py) ---- */
 export type InventoryType = "Food" | "Beverages" | "Gear" | "Tackle" | "Misc";
 export const INVENTORY_TYPES: InventoryType[] = ["Food", "Beverages", "Gear", "Tackle", "Misc"];
-export type QtyBasis = "per_person" | "per_cabin" | "per_boat" | "per_group";
+export type QtyBasis = "per_person" | "per_person_peak" | "per_cabin" | "per_boat" | "per_group";
 export type QtyPeriod = "per_trip" | "per_day";
 export type Responsibility = "shared" | "personal" | "personal_stored";
 export type PackLineStatus = "planned" | "purchased" | "packed";
@@ -304,9 +304,41 @@ export type PackPerson = {
   packed: boolean;
 };
 
+/** A packing container — numbered, optionally tied to a cabin. Trip-scoped. */
+export type Box = {
+  id: string;
+  trip_id: string;
+  label: string;
+  cabin_id: string | null;
+  notes: string | null;
+  sort_order: number;
+};
+
+/** Who has a unit for one week (the dry-bag handoff: same unit, a different
+ *  person each week). Cabin derives through that person's stay. */
+export type PackUnitAssignment = {
+  id: string;
+  unit_id: string;
+  segment_id: string;
+  participant_id: string;
+};
+
+/** One distinguishable unit of an itemized line — "Blue", "Ron's". When a line
+ *  has units, its effective quantity is the unit count. */
+export type PackUnit = {
+  id: string;
+  pack_item_id: string;
+  label: string | null;
+  box_id: string | null;
+  notes: string | null;
+  sort_order: number;
+  assignments: PackUnitAssignment[];
+};
+
 /** An inventory item on this trip's packing list (GET /trips/{id}/pack), with
  *  trip-specific quantity/responsibility/progress layered on. `segment_id`
- *  scopes a line to one week (null = whole trip). */
+ *  scopes a line to one week (null = whole trip). `box_id` boxes an
+ *  un-itemized line; itemized lines box per unit. */
 export type PackLine = {
   id: string;
   trip_id: string;
@@ -318,9 +350,11 @@ export type PackLine = {
   segment_id: string | null;
   status: PackLineStatus;
   notes: string | null;
+  box_id: string | null;
   sort_order: number;
   item: InventoryItem;
   people: PackPerson[];
+  units: PackUnit[];
 };
 
 export type PackCopyResult = { copied: number; skipped: number };

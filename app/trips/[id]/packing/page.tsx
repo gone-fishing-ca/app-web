@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { Check, ClipboardList, Copy, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ClipboardList, Copy, Layers, Package, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { Badge, Btn, Card, EmptyState, Field, ModalShell, SectionTitle, StatCard } from "@/components/ui";
 import {
   type ItemDraft,
@@ -13,11 +13,13 @@ import {
 import {
   api,
   INVENTORY_TYPES,
+  type Box,
   type InventoryItem,
   type InventoryType,
   type PackCopyResult,
   type PackLine,
   type PackLineStatus,
+  type PackUnit,
   type Participant,
   type QtyBasis,
   type QtyPeriod,
@@ -25,6 +27,7 @@ import {
   type Segment,
   type Stay,
   type Trip,
+  type TripLake,
 } from "@/lib/api";
 import { fmtQty, hintLabel, suggestQty, tripFacts } from "@/lib/packing";
 
@@ -58,10 +61,14 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   const [segments, setSegments] = useState<Segment[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
   const [otherTrips, setOtherTrips] = useState<Trip[]>([]);
+  const [boxes, setBoxes] = useState<Box[]>([]);
+  const [tripLakes, setTripLakes] = useState<TripLake[]>([]);
   const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<PackLine | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
+  const [boxesOpen, setBoxesOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   function reload() {
@@ -74,9 +81,28 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setParticipants).catch(() => {});
     api.get<Segment[]>(`/trips/${tripId}/segments`).then(setSegments).catch(() => {});
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
+    api.get<Box[]>(`/trips/${tripId}/boxes`).then(setBoxes).catch(() => {});
+    api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setTripLakes).catch(() => {});
     api.get<Trip[]>(`/trips`).then((ts) => setOtherTrips(ts.filter((t) => t.id !== tripId))).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
+
+  function toggleExpanded(lineId: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineId)) next.delete(lineId);
+      else next.add(lineId);
+      return next;
+    });
+  }
+
+  function replaceUnit(lineId: string, unit: PackUnit) {
+    setLines((prev) =>
+      prev?.map((l) =>
+        l.id === lineId ? { ...l, units: l.units.map((u) => (u.id === unit.id ? unit : u)) } : l,
+      ) ?? null,
+    );
+  }
 
   const facts = useMemo(() => tripFacts(participants.length, segments, stays), [participants, segments, stays]);
   const segName = useMemo(() => new Map(segments.map((s) => [s.id, s.name])), [segments]);
@@ -121,6 +147,45 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     }
   }
 
+  async function addUnits(line: PackLine, count: number, label?: string) {
+    try {
+      const created = await api.post<PackUnit[]>(`/trips/${tripId}/pack/${line.id}/units`, { count, label: label ?? null });
+      setLines((prev) => prev?.map((l) => (l.id === line.id ? { ...l, units: [...l.units, ...created] } : l)) ?? null);
+      setExpanded((prev) => new Set(prev).add(line.id));
+    } catch (e) {
+      setError(errMsg(e, "Couldn't add units"));
+    }
+  }
+
+  async function patchUnit(line: PackLine, unit: PackUnit, body: Record<string, unknown>) {
+    try {
+      const updated = await api.patch<PackUnit>(`/trips/${tripId}/pack/units/${unit.id}`, body);
+      replaceUnit(line.id, updated);
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+  }
+
+  async function deleteUnit(line: PackLine, unit: PackUnit) {
+    try {
+      await api.del(`/trips/${tripId}/pack/units/${unit.id}`);
+      setLines((prev) => prev?.map((l) => (l.id === line.id ? { ...l, units: l.units.filter((u) => u.id !== unit.id) } : l)) ?? null);
+    } catch (e) {
+      setError(errMsg(e, "Delete failed"));
+    }
+  }
+
+  async function assignUnit(line: PackLine, unit: PackUnit, segmentId: string, participantId: string | null) {
+    try {
+      const updated = await api.put<PackUnit>(`/trips/${tripId}/pack/units/${unit.id}/assignment`, {
+        segment_id: segmentId, participant_id: participantId,
+      });
+      replaceUnit(line.id, updated);
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+  }
+
   async function copyFrom(sourceId: string) {
     try {
       const res = await api.post<PackCopyResult>(`/trips/${tripId}/pack/copy-from/${sourceId}`);
@@ -146,6 +211,9 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
       <SectionTitle
         right={
           <div className="flex flex-wrap gap-2">
+            <Btn kind="ghost" icon={Package} onClick={() => setBoxesOpen(true)}>
+              Boxes{boxes.length > 0 ? ` (${boxes.length})` : ""}
+            </Btn>
             {otherTrips.length > 0 && (
               <Btn kind="ghost" icon={Copy} onClick={() => setCopyOpen(true)}>Copy from…</Btn>
             )}
@@ -224,9 +292,12 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                       </div>
                       {group.map((line) => {
                         const suggestion = suggestQty(line.item, line.segment_id ? tripFacts(participants.length, segments, stays, line.segment_id) : facts);
+                        const itemized = line.units.length > 0;
+                        const isOpen = expanded.has(line.id);
                         return (
-                          <div key={line.id} className="grid items-center px-4 sm:px-5 py-2"
-                            style={{ gridTemplateColumns: "minmax(220px,2fr) 150px 130px minmax(140px,1fr) 110px 70px", gap: 10 }}>
+                          <div key={line.id}>
+                          <div className="grid items-center px-4 sm:px-5 py-2"
+                            style={{ gridTemplateColumns: "minmax(220px,2fr) 150px 130px minmax(140px,1fr) 110px 100px", gap: 10 }}>
                             {/* name + hint */}
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
@@ -240,7 +311,17 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               )}
                             </div>
 
-                            {/* qty */}
+                            {/* qty — itemized lines count their units instead */}
+                            {itemized ? (
+                              <button onClick={() => toggleExpanded(line.id)}
+                                className="inline-flex items-center gap-1.5 rounded-[9px] px-2 py-1.5 text-[13px] font-semibold w-fit"
+                                style={{ background: "var(--accent-100)", color: "var(--accent-600)", border: "1px solid transparent" }}
+                                title="Show the individual units">
+                                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                {line.units.length} units
+                                {suggestion != null && line.units.length === suggestion && <Check size={13} />}
+                              </button>
+                            ) : (
                             <div className="flex items-baseline gap-1.5">
                               <input
                                 type="number" inputMode="decimal" min={0} step="any"
@@ -261,6 +342,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 {line.unit || (line.quantity == null && suggestion != null ? "suggested" : "")}
                               </span>
                             </div>
+                            )}
 
                             {/* responsibility */}
                             <select
@@ -303,6 +385,17 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
 
                             {/* row actions */}
                             <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => toggleExpanded(line.id)}
+                                title={itemized ? "Show units" : "Itemize — label, assign, and box individual units"}
+                                className="grid place-items-center"
+                                style={{
+                                  width: 28, height: 28, borderRadius: 7,
+                                  background: isOpen ? "var(--accent-100)" : "var(--surface-2)",
+                                  border: "1px solid var(--border)",
+                                  color: isOpen ? "var(--accent-600)" : "var(--text-2)",
+                                }}>
+                                <Layers size={13} />
+                              </button>
                               <button onClick={() => setEditing(line)} title="Edit"
                                 className="grid place-items-center"
                                 style={{ width: 28, height: 28, borderRadius: 7, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
@@ -314,6 +407,22 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 <Trash2 size={13} />
                               </button>
                             </div>
+                          </div>
+
+                          {isOpen && (
+                            <UnitPanel
+                              line={line}
+                              segments={line.segment_id ? segments.filter((s) => s.id === line.segment_id) : segments}
+                              participants={participants}
+                              stays={stays}
+                              boxes={boxes}
+                              suggestion={suggestion}
+                              onAdd={(count, label) => void addUnits(line, count, label)}
+                              onPatch={(unit, body) => void patchUnit(line, unit, body)}
+                              onDelete={(unit) => void deleteUnit(line, unit)}
+                              onAssign={(unit, segId, pid) => void assignUnit(line, unit, segId, pid)}
+                            />
+                          )}
                           </div>
                         );
                       })}
@@ -340,11 +449,22 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
         />
       )}
 
+      {boxesOpen && (
+        <BoxesModal
+          tripId={tripId}
+          boxes={boxes}
+          setBoxes={setBoxes}
+          tripLakes={tripLakes}
+          onClose={() => setBoxesOpen(false)}
+        />
+      )}
+
       {editing && (
         <EditLineModal
           line={editing}
           segments={segments}
           participants={participants}
+          boxes={boxes}
           onSave={async (lineBody, itemBody) => {
             let ok = true;
             if (Object.keys(itemBody).length > 0) {
@@ -382,6 +502,222 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
         </ModalShell>
       )}
     </div>
+  );
+}
+
+/* ---- Units: the itemized breakdown of one line ----------------------------- */
+function UnitPanel({
+  line, segments, participants, stays, boxes, suggestion, onAdd, onPatch, onDelete, onAssign,
+}: {
+  line: PackLine;
+  segments: Segment[];
+  participants: Participant[];
+  stays: Stay[];
+  boxes: Box[];
+  suggestion: number | null;
+  onAdd: (count: number, label?: string) => void;
+  onPatch: (unit: PackUnit, body: Record<string, unknown>) => void;
+  onDelete: (unit: PackUnit) => void;
+  onAssign: (unit: PackUnit, segmentId: string, participantId: string | null) => void;
+}) {
+  const attendees = useMemo(() => {
+    const m = new Map<string, Participant[]>();
+    for (const seg of segments) {
+      const ids = new Set(stays.filter((s) => s.segment_id === seg.id).map((s) => s.participant_id));
+      m.set(seg.id, participants.filter((p) => ids.has(p.id)));
+    }
+    return m;
+  }, [segments, participants, stays]);
+
+  const remaining = suggestion != null ? Math.max(0, Math.round(suggestion) - line.units.length) : 0;
+  const cols = `minmax(130px,1.2fr) repeat(${segments.length}, minmax(130px,1fr)) 140px 34px`;
+
+  return (
+    <div className="px-4 sm:px-5 pb-3">
+      <div className="rounded-[12px] px-3 py-2"
+        style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+        {line.units.length > 0 && (
+          <div className="grid items-center gap-2 py-1 text-[11px] font-bold uppercase"
+            style={{ gridTemplateColumns: cols, letterSpacing: ".05em", color: "var(--text-3)" }}>
+            <span>Unit</span>
+            {segments.map((s) => <span key={s.id}>{s.name}</span>)}
+            <span>Box</span>
+            <span />
+          </div>
+        )}
+        {line.units.map((unit) => (
+          <div key={unit.id} className="grid items-center gap-2 py-1.5"
+            style={{ gridTemplateColumns: cols, borderTop: "1px solid var(--border)" }}>
+            <input
+              defaultValue={unit.label ?? ""}
+              placeholder="Label — Blue, Ron's…"
+              onBlur={(e) => {
+                const v = e.target.value.trim() || null;
+                if (v !== unit.label) onPatch(unit, { label: v });
+              }}
+              className="rounded-[8px] px-2 py-1.5 text-[13px] outline-none min-w-0"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+            />
+            {segments.map((seg) => {
+              const assigned = unit.assignments.find((a) => a.segment_id === seg.id);
+              return (
+                <select key={seg.id}
+                  value={assigned?.participant_id ?? ""}
+                  onChange={(e) => onAssign(unit, seg.id, e.target.value || null)}
+                  className="rounded-[8px] px-2 py-1.5 text-[12.5px] min-w-0"
+                  style={{
+                    background: "var(--surface)", border: "1px solid var(--border)",
+                    color: assigned ? "var(--text)" : "var(--text-3)",
+                  }}
+                >
+                  <option value="">—</option>
+                  {(attendees.get(seg.id) ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              );
+            })}
+            <select
+              value={unit.box_id ?? ""}
+              onChange={(e) => onPatch(unit, { box_id: e.target.value || null })}
+              className="rounded-[8px] px-2 py-1.5 text-[12.5px] min-w-0"
+              style={{
+                background: "var(--surface)", border: "1px solid var(--border)",
+                color: unit.box_id ? "var(--text)" : "var(--text-3)",
+              }}
+            >
+              <option value="">No box</option>
+              {boxes.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+            <button onClick={() => onDelete(unit)} title="Remove unit"
+              className="grid place-items-center"
+              style={{ width: 26, height: 26, borderRadius: 7, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+        <div className="flex flex-wrap items-center gap-3 py-1.5"
+          style={{ borderTop: line.units.length > 0 ? "1px solid var(--border)" : "none" }}>
+          <button onClick={() => onAdd(1)}
+            className="inline-flex items-center gap-1 text-[12.5px] font-semibold"
+            style={{ color: "var(--accent-600)" }}>
+            <Plus size={13} /> Add unit
+          </button>
+          {remaining > 0 && (
+            <button onClick={() => onAdd(remaining)}
+              className="text-[12.5px] font-semibold"
+              style={{ color: "var(--accent-600)" }}>
+              Create {remaining} more (suggested {fmtQty(suggestion!)})
+            </button>
+          )}
+          {line.units.length === 0 && (
+            <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
+              Units get their own label, per-week person, and box — for gear like dry bags that's handed off between weeks.
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Boxes: numbered containers, each tied to a cabin ----------------------- */
+function BoxesModal({
+  tripId, boxes, setBoxes, tripLakes, onClose,
+}: {
+  tripId: string;
+  boxes: Box[];
+  setBoxes: (fn: (prev: Box[]) => Box[]) => void;
+  tripLakes: TripLake[];
+  onClose: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const cabins = useMemo(
+    () => tripLakes.flatMap((l) => l.cabins.map((c) => ({ id: c.id, name: tripLakes.length > 1 ? `${c.name} — ${l.name}` : c.name }))),
+    [tripLakes],
+  );
+
+  async function addBox() {
+    try {
+      const created = await api.post<Box>(`/trips/${tripId}/boxes`, {
+        label: `Box ${boxes.length + 1}`, sort_order: boxes.length,
+      });
+      setBoxes((prev) => [...prev, created]);
+    } catch (e) {
+      setError(errMsg(e, "Couldn't add the box"));
+    }
+  }
+
+  async function patchBox(box: Box, body: Record<string, unknown>) {
+    try {
+      const updated = await api.patch<Box>(`/trips/${tripId}/boxes/${box.id}`, body);
+      setBoxes((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+  }
+
+  async function deleteBox(box: Box) {
+    if (!confirm(`Delete ${box.label}? Items pointing at it just lose their box.`)) return;
+    try {
+      await api.del(`/trips/${tripId}/boxes/${box.id}`);
+      setBoxes((prev) => prev.filter((b) => b.id !== box.id));
+    } catch (e) {
+      setError(errMsg(e, "Delete failed"));
+    }
+  }
+
+  return (
+    <ModalShell
+      title="Boxes"
+      subtitle="Numbered containers for the trip up — label each with the cabin it belongs to."
+      maxWidth={520}
+      onClose={onClose}
+      footer={<Btn kind="subtle" icon={Plus} className="mr-auto" onClick={() => void addBox()}>Add box</Btn>}
+    >
+      {error && (
+        <div className="mb-3 rounded-[10px] px-3 py-2 text-[13px]"
+          style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
+      )}
+      {boxes.length === 0 ? (
+        <div className="py-6 text-center text-[13.5px]" style={{ color: "var(--text-3)" }}>
+          No boxes yet — add one, then assign items (or itemized units) to it from the list.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {boxes.map((box) => (
+            <div key={box.id} className="flex items-center gap-2">
+              <input
+                defaultValue={box.label}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v && v !== box.label) void patchBox(box, { label: v });
+                }}
+                className="flex-1 min-w-0 rounded-[9px] px-2.5 py-2 text-[13.5px] font-semibold outline-none"
+                style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+              />
+              <select
+                value={box.cabin_id ?? ""}
+                onChange={(e) => void patchBox(box, { cabin_id: e.target.value || null })}
+                className="rounded-[9px] px-2 py-2 text-[13px] w-[180px]"
+                style={{
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                  color: box.cabin_id ? "var(--text)" : "var(--text-3)",
+                }}
+              >
+                <option value="">No cabin</option>
+                {cabins.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button onClick={() => void deleteBox(box)} title="Delete box"
+                className="grid place-items-center flex-none"
+                style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </ModalShell>
   );
 }
 
@@ -536,11 +872,12 @@ function NewItemForm({
 
 /* ---- Edit one line (+ its master inventory item) --------------------------- */
 function EditLineModal({
-  line, segments, participants, onSave, onClose,
+  line, segments, participants, boxes, onSave, onClose,
 }: {
   line: PackLine;
   segments: Segment[];
   participants: Participant[];
+  boxes: Box[];
   onSave: (lineBody: Record<string, unknown>, itemBody: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
 }) {
@@ -549,6 +886,7 @@ function EditLineModal({
   const [resp, setResp] = useState<Responsibility>(line.responsibility);
   const [assignee, setAssignee] = useState(line.assignee_participant_id ?? "");
   const [segmentId, setSegmentId] = useState(line.segment_id ?? "");
+  const [boxId, setBoxId] = useState(line.box_id ?? "");
   const [notes, setNotes] = useState(line.notes ?? "");
   // Master item fields (saved back to the inventory catalog).
   const [name, setName] = useState(line.item.name);
@@ -568,6 +906,7 @@ function EditLineModal({
     if (resp !== line.responsibility) lineBody.responsibility = resp;
     if ((assignee || null) !== line.assignee_participant_id) lineBody.assignee_participant_id = assignee || null;
     if ((segmentId || null) !== line.segment_id) lineBody.segment_id = segmentId || null;
+    if ((boxId || null) !== line.box_id) lineBody.box_id = boxId || null;
     if ((notes || null) !== line.notes) lineBody.notes = notes || null;
 
     const itemBody: Record<string, unknown> = {};
@@ -616,6 +955,10 @@ function EditLineModal({
         {resp === "shared" && (
           <SelectField label="Assigned to" value={assignee} onChange={setAssignee}
             options={[["", "Unassigned"], ...participants.map((p) => [p.id, p.name] as [string, string])]} />
+        )}
+        {line.units.length === 0 && boxes.length > 0 && (
+          <SelectField label="Box" value={boxId} onChange={setBoxId}
+            options={[["", "No box"], ...boxes.map((b) => [b.id, b.label] as [string, string])]} />
         )}
         <Field label="Trip notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Only for this trip" />
 

@@ -39,7 +39,7 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Dashboard (countdown, KPIs, crew, pack-list summary) | ✅ fully functional |
 | Participants | ✅ full CRUD + edit row |
 | Master inventory (`/inventory` — reusable catalog: taxonomy, qty hints, archive) | ✅ wired |
-| Packing (trip list from inventory: copy-from-previous-trip, add/search, suggested quantities, responsibility + assignee, status) | ✅ wired |
+| Packing (trip list from inventory: copy-from-previous-trip, add/search, suggested quantities, responsibility + assignee, status; itemize lines into labeled units with per-week assignment + boxes) | ✅ wired |
 | My pack list (per-person view: you-bring / stored-at-HQ / assigned group gear, packed checkoffs) | ✅ wired |
 | Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — edited via the lake modal on the Overview week cards (no separate page) |
 | Contacts (group + relatives, outfitter edit, trip resources) | ✅ wired — address-book contacts & reusable resources |
