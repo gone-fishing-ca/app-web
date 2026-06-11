@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Calendar, MapPin, Plus, Users } from "lucide-react";
+import { Boxes, Calendar, MapPin, Plus, Users } from "lucide-react";
 import { Btn, Card, Eyebrow, SectionTitle, Wordmark } from "@/components/ui";
 import { UserMenu } from "@/components/user-menu";
 import { api, type Trip } from "@/lib/api";
@@ -76,11 +76,16 @@ export default function TripsPage() {
       </header>
 
       <main className="max-w-[1100px] mx-auto px-4 sm:px-8 py-6 sm:py-10">
-        <div className="flex items-center justify-between mb-7">
+        <div className="flex items-center justify-between gap-3 mb-7">
           <Eyebrow>Your trips</Eyebrow>
-          <Link href="/trips/new">
-            <Btn kind="accent" icon={Plus} size="lg">New trip</Btn>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/inventory">
+              <Btn kind="ghost" icon={Boxes} size="lg">Inventory</Btn>
+            </Link>
+            <Link href="/trips/new">
+              <Btn kind="accent" icon={Plus} size="lg">New trip</Btn>
+            </Link>
+          </div>
         </div>
 
         {error && (

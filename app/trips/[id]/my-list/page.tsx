@@ -1,0 +1,193 @@
+"use client";
+
+import { use, useEffect, useMemo, useState } from "react";
+import { Backpack, Home, Luggage } from "lucide-react";
+import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
+import {
+  api,
+  type PackLine,
+  type PackPerson,
+  type Participant,
+} from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { effectiveSource, hintLabel, personRow } from "@/lib/packing";
+
+function errMsg(e: unknown, fallback: string): string {
+  return e && typeof e === "object" && "message" in e
+    ? String((e as { message?: string }).message)
+    : fallback;
+}
+
+export default function MyListPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: tripId } = use(params);
+  const { user } = useAuth();
+  const [lines, setLines] = useState<PackLine[] | null>(null);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [selected, setSelected] = useState<string | "">("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get<PackLine[]>(`/trips/${tripId}/pack`).then(setLines).catch((e) => setError(errMsg(e, "Load failed")));
+    api.get<Participant[]>(`/trips/${tripId}/participants`).then(setParticipants).catch(() => {});
+  }, [tripId]);
+
+  // Default to the signed-in user's roster row; organizers can view anyone's.
+  const me = useMemo(
+    () => participants.find((p) => p.user_id && p.user_id === user?.id) ?? null,
+    [participants, user],
+  );
+  const participantId = selected || me?.id || participants[0]?.id || "";
+  const participant = participants.find((p) => p.id === participantId) ?? null;
+
+  const { bring, stored, shared } = useMemo(() => {
+    const personal = (lines ?? []).filter(
+      (l) => l.responsibility === "personal" || l.responsibility === "personal_stored",
+    );
+    return {
+      bring: personal.filter((l) => participantId && effectiveSource(l, participantId) === "self"),
+      stored: personal.filter((l) => participantId && effectiveSource(l, participantId) === "stored"),
+      shared: (lines ?? []).filter(
+        (l) => l.responsibility === "shared" && l.assignee_participant_id === participantId,
+      ),
+    };
+  }, [lines, participantId]);
+
+  async function setPerson(line: PackLine, body: { packed?: boolean; source?: "self" | "stored" | null }) {
+    if (!participantId) return;
+    try {
+      const saved = await api.put<PackPerson>(`/trips/${tripId}/pack/people`, {
+        pack_item_id: line.id,
+        participant_id: participantId,
+        ...body,
+      });
+      setLines((prev) =>
+        prev?.map((l) =>
+          l.id === line.id
+            ? {
+                ...l,
+                people: [...l.people.filter((pp) => pp.id !== saved.id && pp.participant_id !== participantId), saved],
+              }
+            : l,
+        ) ?? null,
+      );
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+  }
+
+  const packedOf = (list: PackLine[]) =>
+    list.filter((l) => participantId && (personRow(l, participantId)?.packed ?? false)).length;
+
+  function Row({ line, flip }: { line: PackLine; flip?: "self" | "stored" }) {
+    const row = participantId ? personRow(line, participantId) : null;
+    const packed = row?.packed ?? false;
+    const sub = line.notes || line.item.notes || hintLabel(line.item);
+    return (
+      <div className="flex items-center gap-3 px-4 sm:px-5 py-2.5" style={{ borderTop: "1px solid var(--border)" }}>
+        <button
+          onClick={() => void setPerson(line, { packed: !packed })}
+          title={packed ? "Packed" : "Not packed yet"}
+          className="grid place-items-center flex-none"
+          style={{
+            width: 22, height: 22, borderRadius: 6,
+            background: packed ? "var(--accent)" : "transparent",
+            border: packed ? "1px solid transparent" : "1.5px solid var(--border-strong)",
+            color: "var(--on-accent)",
+          }}
+        >
+          {packed && <span style={{ fontSize: 13, fontWeight: 700 }}>✓</span>}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="truncate text-[14px] font-semibold"
+            style={{ color: "var(--text)", textDecoration: packed ? "line-through" : "none", opacity: packed ? 0.6 : 1 }}>
+            {line.item.name}
+          </div>
+          {sub && <div className="truncate text-[12px]" style={{ color: "var(--text-3)" }}>{sub}</div>}
+        </div>
+        <Badge tone="neutral">{line.item.item_type}</Badge>
+        {flip && (
+          <button
+            onClick={() => void setPerson(line, { source: flip })}
+            className="text-[12px] font-semibold flex-none"
+            style={{ color: "var(--accent-600)" }}
+            title={flip === "self" ? "This person brings their own instead" : "This person's is stored at HQ instead"}
+          >
+            {flip === "self" ? "brings own →" : "→ stored at HQ"}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  function Section({ icon: Icon, title, subtitle, list, flip }: {
+    icon: typeof Backpack; title: string; subtitle: string; list: PackLine[]; flip?: "self" | "stored";
+  }) {
+    if (list.length === 0) return null;
+    return (
+      <Card>
+        <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5">
+          <Icon size={18} strokeWidth={1.9} style={{ color: "var(--accent-600)" }} />
+          <div className="flex-1 min-w-0">
+            <div style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: "var(--display-weight)" as unknown as number,
+              letterSpacing: "var(--display-tracking)",
+              fontSize: 16.5, color: "var(--text)",
+            }}>
+              {title}
+            </div>
+            <div className="text-[12px]" style={{ color: "var(--text-3)" }}>{subtitle}</div>
+          </div>
+          <Badge tone={packedOf(list) === list.length ? "success" : "neutral"}>
+            {packedOf(list)} / {list.length} packed
+          </Badge>
+        </div>
+        {list.map((l) => <Row key={l.id} line={l} flip={flip} />)}
+      </Card>
+    );
+  }
+
+  return (
+    <div className="p-4 sm:p-7 max-w-[860px] mx-auto">
+      <SectionTitle
+        right={
+          participants.length > 0 && (
+            <select
+              value={participantId}
+              onChange={(e) => setSelected(e.target.value)}
+              className="rounded-[11px] px-3 py-2 text-[13.5px] font-semibold"
+              style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+            >
+              {participants.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}{me?.id === p.id ? " (you)" : ""}</option>
+              ))}
+            </select>
+          )
+        }
+      >
+        {participant && me?.id !== participant.id ? `${participant.name}'s pack list` : "My pack list"}
+      </SectionTitle>
+
+      {error && (
+        <div className="mb-4 rounded-[10px] px-3 py-2.5 text-[13px]"
+          style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
+      )}
+
+      {lines === null ? (
+        <div style={{ color: "var(--text-3)" }}>Loading…</div>
+      ) : bring.length + stored.length + shared.length === 0 ? (
+        <EmptyState icon={Backpack} title="Nothing assigned yet"
+          subtitle="Personal items and shared items assigned to this person will show up here as the Packing list comes together." />
+      ) : (
+        <div className="flex flex-col gap-5">
+          <Section icon={Luggage} title="You bring" flip="stored"
+            subtitle="Pack these yourself — they fly with you." list={bring} />
+          <Section icon={Home} title="Stored at HQ for you" flip="self"
+            subtitle="Already in the Chicago closet — the organizer brings these up." list={stored} />
+          <Section icon={Backpack} title="Group gear you're on the hook for"
+            subtitle="Shared items assigned to you on the Packing page." list={shared} />
+        </div>
+      )}
+    </div>
+  );
+}

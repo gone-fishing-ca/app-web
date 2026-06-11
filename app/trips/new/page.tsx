@@ -176,7 +176,7 @@ export default function NewTripPage() {
                   <label key={t.id} className="inline-flex items-center gap-2">
                     <input type="radio" name="clone" checked={cloneFrom === t.id} onChange={() => setCloneFrom(t.id)} />
                     <span className="text-[14px]" style={{ color: "var(--text)" }}>
-                      {t.name} <span style={{ color: "var(--text-3)" }}>— copies lakes, cabins, weeks, contacts, pack list, gear, food, beverage templates, and the group (week assignments start fresh)</span>
+                      {t.name} <span style={{ color: "var(--text-3)" }}>— copies lakes, cabins, weeks, contacts, and the group (week assignments start fresh; copy the packing list from the new trip&apos;s Packing page)</span>
                     </span>
                   </label>
                 ))}

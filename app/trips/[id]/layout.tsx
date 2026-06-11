@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Beer,
+  Backpack,
   CalendarRange,
   ClipboardList,
   ContactRound,
@@ -15,9 +15,7 @@ import {
   PlaneTakeoff,
   Sun,
   Users,
-  Utensils,
   Wallet,
-  Wrench,
   X,
 } from "lucide-react";
 import { Wordmark } from "@/components/ui";
@@ -32,10 +30,8 @@ const NAV: { id: string; label: string; icon: typeof Users; href: string }[] = [
   { id: "contacts",    label: "Contacts",      icon: ContactRound,    href: "/contacts" },
   { id: "segments",    label: "Schedule",      icon: CalendarRange,   href: "/segments" },
   { id: "flights",     label: "Flights",       icon: PlaneTakeoff,    href: "/flights" },
-  { id: "pack-list",   label: "Pack list",     icon: ClipboardList,   href: "/pack-list" },
-  { id: "shared-gear", label: "Shared gear",   icon: Wrench,          href: "/shared-gear" },
-  { id: "food",        label: "Food",          icon: Utensils,        href: "/food" },
-  { id: "beverages",   label: "Beverages",     icon: Beer,            href: "/beverages" },
+  { id: "packing",     label: "Packing",       icon: ClipboardList,   href: "/packing" },
+  { id: "my-list",     label: "My pack list",  icon: Backpack,        href: "/my-list" },
   { id: "budget",      label: "Budget",        icon: Wallet,          href: "/budget" },
 ];
 

@@ -265,20 +265,65 @@ export type FlightLookupLeg = {
   arrival_time: string | null;
 };
 
-export type PackItem = {
+/* ---- Inventory & packing (mirrors api/src/schemas.py) ---- */
+export type InventoryType = "Food" | "Beverages" | "Gear" | "Tackle" | "Misc";
+export const INVENTORY_TYPES: InventoryType[] = ["Food", "Beverages", "Gear", "Tackle", "Misc"];
+export type QtyBasis = "per_person" | "per_cabin" | "per_boat" | "per_group";
+export type QtyPeriod = "per_trip" | "per_day";
+export type Responsibility = "shared" | "personal" | "personal_stored";
+export type PackLineStatus = "planned" | "purchased" | "packed";
+export type PackSource = "self" | "stored";
+
+/** A master-inventory item — the reusable, owner-scoped catalog grown across
+ *  years of trips. `item_type` is the fixed top level; category/subcategory are
+ *  free text. The qty fields are a *hint* used to suggest amounts from trip
+ *  facts (people × cabins × days), not a quantity. */
+export type InventoryItem = {
+  id: string;
+  owner_id: string;
+  name: string;
+  item_type: InventoryType;
+  category: string | null;
+  subcategory: string | null;
+  default_unit: string | null; // null = a count
+  default_qty: number | null;
+  qty_basis: QtyBasis;
+  qty_period: QtyPeriod;
+  default_responsibility: Responsibility;
+  notes: string | null;
+  archived: boolean;
+};
+
+/** One participant's slice of a personal pack line. `source` overrides where
+ *  their copy comes from (null = inherit from the line's responsibility). */
+export type PackPerson = {
+  id: string;
+  pack_item_id: string;
+  participant_id: string;
+  source: PackSource | null;
+  packed: boolean;
+};
+
+/** An inventory item on this trip's packing list (GET /trips/{id}/pack), with
+ *  trip-specific quantity/responsibility/progress layered on. `segment_id`
+ *  scopes a line to one week (null = whole trip). */
+export type PackLine = {
   id: string;
   trip_id: string;
-  name: string;
-  category: string;
+  inventory_item_id: string;
+  quantity: number | null;
+  unit: string | null;
+  responsibility: Responsibility;
+  assignee_participant_id: string | null;
+  segment_id: string | null;
+  status: PackLineStatus;
   notes: string | null;
   sort_order: number;
+  item: InventoryItem;
+  people: PackPerson[];
 };
-export type PackStatus = {
-  id: string;
-  item_id: string;
-  participant_id: string;
-  done: boolean;
-};
+
+export type PackCopyResult = { copied: number; skipped: number };
 export type InviteStatus = "pending" | "accepted" | "revoked";
 export type Invitation = {
   id: string;

@@ -38,12 +38,14 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Trip list + create / clone | ✅ fully functional |
 | Dashboard (countdown, KPIs, crew, pack-list summary) | ✅ fully functional |
 | Participants | ✅ full CRUD + edit row |
-| Pack list (master list + per-participant statuses) | ✅ full CRUD + toggle |
+| Master inventory (`/inventory` — reusable catalog: taxonomy, qty hints, archive) | ✅ wired |
+| Packing (trip list from inventory: copy-from-previous-trip, add/search, suggested quantities, responsibility + assignee, status) | ✅ wired |
+| My pack list (per-person view: you-bring / stored-at-HQ / assigned group gear, packed checkoffs) | ✅ wired |
 | Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — edited via the lake modal on the Overview week cards (no separate page) |
 | Contacts (group + relatives, outfitter edit, trip resources) | ✅ wired — address-book contacts & reusable resources |
 | Schedule (calendar + day-by-day itinerary: weeks, fly in/out, itinerary items) | ✅ wired |
 | Flights (per-person legs grouped by person, optional Schedule link, AeroDataBox schedule lookup) | ✅ wired |
-| Shared gear / Food / Beverages / Budget | stub page (API endpoints exist) |
+| Budget | stub page (API endpoints exist) |
 
 ## File map
 
@@ -55,26 +57,30 @@ app/
   page.tsx               redirects to /login or /trips
   login/page.tsx         split-hero sign-in
   signup/page.tsx        centred-card sign-up
+  inventory/page.tsx     master inventory catalog (search, taxonomy, archive)
   trips/
-    page.tsx             trip list / "new trip" CTA
+    page.tsx             trip list / "new trip" CTA / inventory link
     new/page.tsx         create-trip form with clone-from selector
     [id]/
       layout.tsx         sidebar + header + dark-mode toggle
       page.tsx           dashboard
       participants/page.tsx  Group roster (+ add-from-address-book picker)
       contacts/page.tsx    group & relatives · outfitters · trip resources
-      pack-list/page.tsx
+      packing/page.tsx     trip packing list (copy-from, add/search inventory, suggestions)
+      my-list/page.tsx     per-person pack list (you-bring / stored-at-HQ / group gear)
       segments/page.tsx    Schedule (calendar + day-by-day itinerary list)
       flights/page.tsx     Flights (per-person legs grouped by person)
-      {shared-gear,food,beverages,budget}/page.tsx  stubs
+      budget/page.tsx      stub
 components/
   ui.tsx                 Btn · Badge · Card · Field · Wordmark · StatCard · EmptyState · …
+  inventory-form.tsx     shared inventory-item editor fields (packing + inventory pages)
   stub.tsx               ModuleStub
 lib/
   config.ts              API_BASE
   supabase.ts            browser Supabase client
   auth.tsx               AuthProvider / useAuth (Supabase-backed)
   api.ts                 typed fetch client; pulls bearer from supabase session
+  packing.ts             trip facts + suggested-quantity math, hint labels
   format.ts              dates, ranges, days-until
 public/walleye/          brand assets copied from the design system
 ```
