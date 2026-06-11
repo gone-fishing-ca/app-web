@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ArrowLeft, Boxes, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Boxes, ChevronDown, ChevronRight, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { GroupHeader, useCollapsedSet } from "@/components/collapsible";
 import {
   type ItemDraft,
   ItemFields,
@@ -62,16 +63,29 @@ export default function InventoryPage() {
     [items, showArchived, typeFilter, q],
   );
 
+  /** type → category → subcategory ("" = none) → items, in server order. */
   const grouped = useMemo(() => {
-    const byType = new Map<string, Map<string, InventoryItem[]>>();
+    const byType = new Map<string, Map<string, Map<string, InventoryItem[]>>>();
     for (const i of filtered) {
-      const cats = byType.get(i.item_type) ?? new Map<string, InventoryItem[]>();
-      const key = [i.category, i.subcategory].filter(Boolean).join(" · ") || "General";
-      cats.set(key, [...(cats.get(key) ?? []), i]);
+      const cats = byType.get(i.item_type) ?? new Map<string, Map<string, InventoryItem[]>>();
+      const cat = i.category || "General";
+      const subs = cats.get(cat) ?? new Map<string, InventoryItem[]>();
+      const sub = i.subcategory || "";
+      subs.set(sub, [...(subs.get(sub) ?? []), i]);
+      cats.set(cat, subs);
       byType.set(i.item_type, cats);
     }
     return byType;
   }, [filtered]);
+
+  const { isCollapsed, toggle } = useCollapsedSet("gf-inventory-collapsed");
+
+  function newItemIn(type: InventoryType, category: string | null, subcategory: string | null) {
+    setEditing({
+      item: null,
+      draft: { ...emptyItemDraft("", type), category: category ?? "", subcategory: subcategory ?? "" },
+    });
+  }
 
   const categoryHints = useMemo(
     () => [...new Set((items ?? []).map((i) => i.category).filter((c): c is string => !!c))].sort(),
@@ -181,9 +195,23 @@ export default function InventoryPage() {
             action={<Btn kind="accent" icon={Plus} onClick={() => setEditing({ item: null, draft: emptyItemDraft(query) })}>New item</Btn>} />
         ) : (
           <div className="flex flex-col gap-5">
-            {INVENTORY_TYPES.filter((t) => grouped.has(t)).map((type) => (
+            {INVENTORY_TYPES.filter((t) => grouped.has(t)).map((type) => {
+              const cats = grouped.get(type)!;
+              const typeCount = [...cats.values()].reduce(
+                (n, subs) => n + [...subs.values()].reduce((m, g) => m + g.length, 0), 0,
+              );
+              const typeOpen = !isCollapsed(type);
+              return (
               <Card key={type}>
-                <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
+                <button
+                  onClick={() => toggle(type)}
+                  className="flex w-full items-center gap-2.5 px-4 sm:px-5 py-3.5 text-left"
+                  style={{ borderBottom: typeOpen ? "1px solid var(--border)" : "none" }}
+                  title={typeOpen ? "Collapse" : "Expand"}
+                >
+                  {typeOpen
+                    ? <ChevronDown size={16} style={{ color: "var(--text-3)" }} />
+                    : <ChevronRight size={16} style={{ color: "var(--text-3)" }} />}
                   <div style={{
                     fontFamily: "var(--font-display)",
                     fontWeight: "var(--display-weight)" as unknown as number,
@@ -192,19 +220,33 @@ export default function InventoryPage() {
                   }}>
                     {type}
                   </div>
-                  <Badge tone="neutral">{[...grouped.get(type)!.values()].reduce((n, g) => n + g.length, 0)}</Badge>
-                </div>
-                {[...grouped.get(type)!.entries()].map(([cat, group]) => (
+                  <Badge tone="neutral">{typeCount}</Badge>
+                </button>
+                {typeOpen && [...cats.entries()].map(([cat, subs]) => {
+                  const catKey = `${type}|${cat}`;
+                  const catCount = [...subs.values()].reduce((m, g) => m + g.length, 0);
+                  const catOpen = !isCollapsed(catKey);
+                  return (
                   <div key={cat}>
-                    <div className="px-4 sm:px-5 pt-3 pb-1 text-[11.5px] font-bold uppercase"
-                      style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
-                      {cat}
-                    </div>
-                    {group.map((item) => (
+                    <GroupHeader level={1} label={cat} count={catCount} open={catOpen}
+                      onToggle={() => toggle(catKey)}
+                      onAdd={() => newItemIn(type, cat === "General" ? null : cat, null)} />
+                    {catOpen && [...subs.entries()].map(([sub, group]) => {
+                      const subKey = `${catKey}|${sub}`;
+                      const subOpen = !sub || !isCollapsed(subKey);
+                      return (
+                      <div key={sub || "_"}>
+                        {sub && (
+                          <GroupHeader level={2} label={sub} count={group.length} open={subOpen}
+                            onToggle={() => toggle(subKey)}
+                            onAdd={() => newItemIn(type, cat === "General" ? null : cat, sub)} />
+                        )}
+                        {subOpen && group.map((item) => (
                       <div key={item.id} className="flex items-center gap-3 px-4 sm:px-5 py-2.5">
                         <div className="flex-1 min-w-0" style={{ opacity: item.archived ? 0.5 : 1 }}>
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>{item.name}</span>
+                            {item.is_spare && <Badge tone="warning">Spare</Badge>}
                             {item.archived && <Badge tone="warning">archived</Badge>}
                           </div>
                           <div className="truncate text-[12px] mt-0.5" style={{ color: "var(--text-3)" }}>
@@ -233,12 +275,17 @@ export default function InventoryPage() {
                           </button>
                         </div>
                       </div>
-                    ))}
+                        ))}
+                      </div>
+                      );
+                    })}
                   </div>
-                ))}
+                  );
+                })}
                 <div className="pb-2" />
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

@@ -289,7 +289,7 @@ export type InventoryItem = {
   default_qty: number | null;
   qty_basis: QtyBasis;
   qty_period: QtyPeriod;
-  default_spare_qty: number | null; // flat per-trip count of backups
+  is_spare: boolean; // a backup item, not part of the working set — badged, sorted last
   default_responsibility: Responsibility;
   notes: string | null;
   archived: boolean;
@@ -330,7 +330,6 @@ export type PackUnit = {
   id: string;
   pack_item_id: string;
   label: string | null;
-  is_spare: boolean; // a backup — not part of the working set
   box_id: string | null;
   notes: string | null;
   sort_order: number;
@@ -349,7 +348,6 @@ export type PackLine = {
   trip_id: string;
   inventory_item_id: string;
   quantity: number | null;
-  spare_quantity: number | null; // confirmed; null = the master hint suggests
   unit: string | null;
   responsibility: Responsibility | null;
   effective_unit: string | null;

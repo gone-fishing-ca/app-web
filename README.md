@@ -74,6 +74,7 @@ app/
 components/
   ui.tsx                 Btn · Badge · Card · Field · Wordmark · StatCard · EmptyState · …
   inventory-form.tsx     shared inventory-item editor fields (packing + inventory pages)
+  collapsible.tsx        GroupHeader + useCollapsedSet (persisted fold state for grouped lists)
   stub.tsx               ModuleStub
 lib/
   config.ts              API_BASE

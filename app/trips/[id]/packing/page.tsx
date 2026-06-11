@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronRight, ClipboardList, Copy, Layers, Package, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { Badge, Btn, Card, EmptyState, Field, ModalShell, SectionTitle, StatCard } from "@/components/ui";
+import { GroupHeader, useCollapsedSet } from "@/components/collapsible";
 import {
   type ItemDraft,
   ItemFields,
@@ -29,7 +30,7 @@ import {
   type Trip,
   type TripLake,
 } from "@/lib/api";
-import { effectiveSpares, fmtQty, hintLabel, suggestQty, tripFacts } from "@/lib/packing";
+import { fmtQty, hintLabel, suggestQty, tripFacts } from "@/lib/packing";
 
 const RESP_LABEL: Record<Responsibility, string> = {
   shared: "Shared",
@@ -65,6 +66,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   const [tripLakes, setTripLakes] = useState<TripLake[]>([]);
   const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
   const [addOpen, setAddOpen] = useState(false);
+  // Scope for a header-launched "Add" — pre-filters the browser and prefills creation.
+  const [addScope, setAddScope] = useState<{ type: InventoryType; category: string | null; subcategory: string | null } | null>(null);
   const [editing, setEditing] = useState<PackLine | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [boxesOpen, setBoxesOpen] = useState(false);
@@ -112,17 +115,27 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     [lines, typeFilter],
   );
 
-  /** type → category → lines, in the server's taxonomy order. */
+  /** type → category → subcategory ("" = none) → lines, in server order. */
   const grouped = useMemo(() => {
-    const byType = new Map<string, Map<string, PackLine[]>>();
+    const byType = new Map<string, Map<string, Map<string, PackLine[]>>>();
     for (const l of filtered) {
-      const cats = byType.get(l.item.item_type) ?? new Map<string, PackLine[]>();
-      const key = [l.item.category, l.item.subcategory].filter(Boolean).join(" · ") || "General";
-      cats.set(key, [...(cats.get(key) ?? []), l]);
+      const cats = byType.get(l.item.item_type) ?? new Map<string, Map<string, PackLine[]>>();
+      const cat = l.item.category || "General";
+      const subs = cats.get(cat) ?? new Map<string, PackLine[]>();
+      const sub = l.item.subcategory || "";
+      subs.set(sub, [...(subs.get(sub) ?? []), l]);
+      cats.set(cat, subs);
       byType.set(l.item.item_type, cats);
     }
     return byType;
   }, [filtered]);
+
+  const { isCollapsed, toggle } = useCollapsedSet(`gf-packing-collapsed-${tripId}`);
+
+  function openAdd(scope: { type: InventoryType; category: string | null; subcategory: string | null } | null) {
+    setAddScope(scope);
+    setAddOpen(true);
+  }
 
   const packedCount = (lines ?? []).filter((l) => l.status === "packed").length;
 
@@ -147,9 +160,9 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     }
   }
 
-  async function addUnits(line: PackLine, count: number, isSpare = false) {
+  async function addUnits(line: PackLine, count: number) {
     try {
-      const created = await api.post<PackUnit[]>(`/trips/${tripId}/pack/${line.id}/units`, { count, is_spare: isSpare });
+      const created = await api.post<PackUnit[]>(`/trips/${tripId}/pack/${line.id}/units`, { count });
       setLines((prev) => prev?.map((l) => (l.id === line.id ? { ...l, units: [...l.units, ...created] } : l)) ?? null);
       setExpanded((prev) => new Set(prev).add(line.id));
     } catch (e) {
@@ -217,7 +230,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
             {otherTrips.length > 0 && (
               <Btn kind="ghost" icon={Copy} onClick={() => setCopyOpen(true)}>Copy from…</Btn>
             )}
-            <Btn kind="accent" icon={Plus} onClick={() => setAddOpen(true)}>Add items</Btn>
+            <Btn kind="accent" icon={Plus} onClick={() => openAdd(null)}>Add items</Btn>
           </div>
         }
       >
@@ -263,14 +276,28 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                   Copy from {latestOther.name}
                 </Btn>
               )}
-              <Btn kind={latestOther ? "ghost" : "accent"} icon={Plus} onClick={() => setAddOpen(true)}>Add items</Btn>
+              <Btn kind={latestOther ? "ghost" : "accent"} icon={Plus} onClick={() => openAdd(null)}>Add items</Btn>
             </div>
           } />
       ) : (
         <div className="flex flex-col gap-5">
-          {INVENTORY_TYPES.filter((t) => grouped.has(t)).map((type) => (
+          {INVENTORY_TYPES.filter((t) => grouped.has(t)).map((type) => {
+            const cats = grouped.get(type)!;
+            const typeCount = [...cats.values()].reduce(
+              (n, subs) => n + [...subs.values()].reduce((m, g) => m + g.length, 0), 0,
+            );
+            const typeOpen = !isCollapsed(type);
+            return (
             <Card key={type}>
-              <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
+              <button
+                onClick={() => toggle(type)}
+                className="flex w-full items-center gap-2.5 px-4 sm:px-5 py-3.5 text-left"
+                style={{ borderBottom: typeOpen ? "1px solid var(--border)" : "none" }}
+                title={typeOpen ? "Collapse" : "Expand"}
+              >
+                {typeOpen
+                  ? <ChevronDown size={16} style={{ color: "var(--text-3)" }} />
+                  : <ChevronRight size={16} style={{ color: "var(--text-3)" }} />}
                 <div style={{
                   fontFamily: "var(--font-display)",
                   fontWeight: "var(--display-weight)" as unknown as number,
@@ -279,24 +306,35 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                 }}>
                   {type}
                 </div>
-                <Badge tone="neutral">{[...grouped.get(type)!.values()].reduce((n, g) => n + g.length, 0)}</Badge>
-              </div>
+                <Badge tone="neutral">{typeCount}</Badge>
+              </button>
 
+              {typeOpen && (
               <div className="overflow-x-auto">
                 <div style={{ minWidth: 760 }}>
-                  {[...grouped.get(type)!.entries()].map(([cat, group]) => (
+                  {[...cats.entries()].map(([cat, subs]) => {
+                    const catKey = `${type}|${cat}`;
+                    const catCount = [...subs.values()].reduce((m, g) => m + g.length, 0);
+                    const catOpen = !isCollapsed(catKey);
+                    return (
                     <div key={cat}>
-                      <div className="px-4 sm:px-5 pt-3 pb-1 text-[11.5px] font-bold uppercase"
-                        style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
-                        {cat}
-                      </div>
-                      {group.map((line) => {
+                      <GroupHeader level={1} label={cat} count={catCount} open={catOpen}
+                        onToggle={() => toggle(catKey)}
+                        onAdd={() => openAdd({ type, category: cat === "General" ? null : cat, subcategory: null })} />
+                      {catOpen && [...subs.entries()].map(([sub, group]) => {
+                        const subKey = `${catKey}|${sub}`;
+                        const subOpen = !sub || !isCollapsed(subKey);
+                        return (
+                        <div key={sub || "_"}>
+                          {sub && (
+                            <GroupHeader level={2} label={sub} count={group.length} open={subOpen}
+                              onToggle={() => toggle(subKey)}
+                              onAdd={() => openAdd({ type, category: cat === "General" ? null : cat, subcategory: sub })} />
+                          )}
+                          {subOpen && group.map((line) => {
                         const suggestion = suggestQty(line.item, line.segment_id ? tripFacts(participants.length, segments, stays, line.segment_id) : facts);
                         const itemized = line.units.length > 0;
                         const isOpen = expanded.has(line.id);
-                        const spares = effectiveSpares(line);
-                        const spareUnits = line.units.filter((u) => u.is_spare).length;
-                        const workingUnits = line.units.length - spareUnits;
                         return (
                           <div key={line.id}>
                           <div className="grid items-center px-4 sm:px-5 py-2"
@@ -305,6 +343,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>{line.item.name}</span>
+                                {line.item.is_spare && <Badge tone="warning">Spare</Badge>}
                                 {line.segment_id && <Badge tone="info">{segName.get(line.segment_id) ?? "Week"}</Badge>}
                               </div>
                               {(line.notes || line.item.notes || hintLabel(line.item)) && (
@@ -321,8 +360,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 style={{ background: "var(--accent-100)", color: "var(--accent-600)", border: "1px solid transparent" }}
                                 title="Show the individual units">
                                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                {workingUnits} units{spareUnits > 0 && ` · ${spareUnits} spare`}
-                                {suggestion != null && workingUnits === Math.round(suggestion) && <Check size={13} />}
+                                {line.units.length} units
+                                {suggestion != null && line.units.length === Math.round(suggestion) && <Check size={13} />}
                               </button>
                             ) : (
                             <div className="flex items-baseline gap-1.5">
@@ -343,7 +382,6 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               />
                               <span className="text-[12px] truncate" style={{ color: "var(--text-3)" }}>
                                 {line.effective_unit || (line.quantity == null && suggestion != null ? "suggested" : "")}
-                                {spares > 0 && <span style={{ color: "var(--accent-600)" }}> +{fmtQty(spares)} spare</span>}
                               </span>
                             </div>
                             )}
@@ -429,23 +467,28 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               stays={stays}
                               boxes={boxes}
                               suggestion={suggestion}
-                              spareSuggestion={spares}
-                              onAdd={(count, isSpare) => void addUnits(line, count, isSpare)}
+                              onAdd={(count) => void addUnits(line, count)}
                               onPatch={(unit, body) => void patchUnit(line, unit, body)}
                               onDelete={(unit) => void deleteUnit(line, unit)}
                               onAssign={(unit, segId, pid) => void assignUnit(line, unit, segId, pid)}
                             />
                           )}
                           </div>
+                          );
+                          })}
+                        </div>
                         );
                       })}
                     </div>
-                  ))}
+                    );
+                  })}
                   <div className="pb-2" />
                 </div>
               </div>
+              )}
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -454,6 +497,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           tripId={tripId}
           inventory={inventory}
           lines={lines ?? []}
+          initial={addScope}
           onAdded={(line, item) => {
             setLines((prev) => (prev ? [...prev, line] : [line]));
             if (!inventory.some((i) => i.id === item.id)) setInventory((prev) => [...prev, item]);
@@ -525,7 +569,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
 
 /* ---- Units: the itemized breakdown of one line ----------------------------- */
 function UnitPanel({
-  line, segments, participants, stays, boxes, suggestion, spareSuggestion, onAdd, onPatch, onDelete, onAssign,
+  line, segments, participants, stays, boxes, suggestion, onAdd, onPatch, onDelete, onAssign,
 }: {
   line: PackLine;
   segments: Segment[];
@@ -533,8 +577,7 @@ function UnitPanel({
   stays: Stay[];
   boxes: Box[];
   suggestion: number | null;
-  spareSuggestion: number;
-  onAdd: (count: number, isSpare?: boolean) => void;
+  onAdd: (count: number) => void;
   onPatch: (unit: PackUnit, body: Record<string, unknown>) => void;
   onDelete: (unit: PackUnit) => void;
   onAssign: (unit: PackUnit, segmentId: string, participantId: string | null) => void;
@@ -548,11 +591,8 @@ function UnitPanel({
     return m;
   }, [segments, participants, stays]);
 
-  const workingCount = line.units.filter((u) => !u.is_spare).length;
-  const spareCount = line.units.length - workingCount;
-  const remaining = suggestion != null ? Math.max(0, Math.round(suggestion) - workingCount) : 0;
-  const spareRemaining = Math.max(0, Math.round(spareSuggestion) - spareCount);
-  const cols = `minmax(130px,1.2fr) repeat(${segments.length}, minmax(130px,1fr)) 140px 54px 34px`;
+  const remaining = suggestion != null ? Math.max(0, Math.round(suggestion) - line.units.length) : 0;
+  const cols = `minmax(130px,1.2fr) repeat(${segments.length}, minmax(130px,1fr)) 140px 34px`;
 
   return (
     <div className="px-4 sm:px-5 pb-3">
@@ -564,7 +604,6 @@ function UnitPanel({
             <span>Unit</span>
             {segments.map((s) => <span key={s.id}>{s.name}</span>)}
             <span>Box</span>
-            <span>Spare</span>
             <span />
           </div>
         )}
@@ -612,13 +651,6 @@ function UnitPanel({
               <option value="">No box</option>
               {boxes.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
             </select>
-            <input
-              type="checkbox"
-              checked={unit.is_spare}
-              onChange={(e) => onPatch(unit, { is_spare: e.target.checked })}
-              title="A backup — not part of the working set"
-              className="mx-auto"
-            />
             <button onClick={() => onDelete(unit)} title="Remove unit"
               className="grid place-items-center"
               style={{ width: 26, height: 26, borderRadius: 7, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
@@ -638,13 +670,6 @@ function UnitPanel({
               className="text-[12.5px] font-semibold"
               style={{ color: "var(--accent-600)" }}>
               Create {remaining} more (suggested {fmtQty(suggestion!)})
-            </button>
-          )}
-          {spareRemaining > 0 && (
-            <button onClick={() => onAdd(spareRemaining, true)}
-              className="text-[12.5px] font-semibold"
-              style={{ color: "var(--accent-600)" }}>
-              Add {spareRemaining} spare{spareRemaining > 1 ? "s" : ""}
             </button>
           )}
           {line.units.length === 0 && (
@@ -760,16 +785,20 @@ function BoxesModal({
 
 /* ---- Add items: search the master inventory, Instacart-style --------------- */
 function AddItemsModal({
-  tripId, inventory, lines, onAdded, onClose,
+  tripId, inventory, lines, initial, onAdded, onClose,
 }: {
   tripId: string;
   inventory: InventoryItem[];
   lines: PackLine[];
+  /** Header-launched adds arrive pre-scoped to a category/subcategory. */
+  initial: { type: InventoryType; category: string | null; subcategory: string | null } | null;
   onAdded: (line: PackLine, item: InventoryItem) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
+  const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>(initial?.type ?? "All");
+  const [catFilter, setCatFilter] = useState<string | null>(initial?.category ?? null);
+  const [subFilter, setSubFilter] = useState<string | null>(initial?.subcategory ?? null);
   const [creating, setCreating] = useState<ItemDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const onList = useMemo(() => new Set(lines.map((l) => l.inventory_item_id)), [lines]);
@@ -780,14 +809,24 @@ function AddItemsModal({
       inventory
         .filter((i) => !i.archived)
         .filter((i) => typeFilter === "All" || i.item_type === typeFilter)
+        .filter((i) => !catFilter || i.category === catFilter)
+        .filter((i) => !subFilter || i.subcategory === subFilter)
         .filter((i) =>
           !q ||
           i.name.toLowerCase().includes(q) ||
           (i.category ?? "").toLowerCase().includes(q) ||
           (i.subcategory ?? "").toLowerCase().includes(q),
         ),
-    [inventory, typeFilter, q],
+    [inventory, typeFilter, catFilter, subFilter, q],
   );
+
+  function startCreate() {
+    setCreating({
+      ...emptyItemDraft(query, typeFilter === "All" ? "Gear" : typeFilter),
+      category: catFilter ?? "",
+      subcategory: subFilter ?? "",
+    });
+  }
 
   async function add(item: InventoryItem) {
     try {
@@ -818,8 +857,7 @@ function AddItemsModal({
       maxWidth={640}
       onClose={onClose}
       footer={!creating && (
-        <Btn kind="subtle" icon={Plus} className="mr-auto"
-          onClick={() => setCreating(emptyItemDraft(query, typeFilter === "All" ? "Gear" : typeFilter))}>
+        <Btn kind="subtle" icon={Plus} className="mr-auto" onClick={startCreate}>
           New inventory item{query.trim() ? ` “${query.trim()}”` : ""}
         </Btn>
       )}
@@ -831,9 +869,14 @@ function AddItemsModal({
         <div className="flex flex-col gap-3">
           <Field icon={Search} value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name or category…" autoFocus />
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {(["All", ...INVENTORY_TYPES] as const).map((t) => (
-              <button key={t} onClick={() => setTypeFilter(t)}
+              <button key={t}
+                onClick={() => {
+                  setTypeFilter(t);
+                  // a different type makes the category scope meaningless
+                  if (t !== typeFilter) { setCatFilter(null); setSubFilter(null); }
+                }}
                 className="px-2.5 py-1 rounded-full text-[12.5px] font-semibold"
                 style={{
                   background: typeFilter === t ? "var(--primary)" : "var(--surface-2)",
@@ -844,6 +887,14 @@ function AddItemsModal({
                 {t}
               </button>
             ))}
+            {catFilter && (
+              <button onClick={() => { setCatFilter(null); setSubFilter(null); }}
+                title="Clear category filter"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12.5px] font-semibold"
+                style={{ background: "var(--accent-100)", color: "var(--accent-600)", border: "1px solid transparent" }}>
+                {catFilter}{subFilter ? ` / ${subFilter}` : ""} ✕
+              </button>
+            )}
           </div>
 
           {error && (
@@ -858,7 +909,10 @@ function AddItemsModal({
               return (
                 <div key={item.id} className="flex items-center gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border)" }}>
                   <div className="flex-1 min-w-0">
-                    <div className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>{item.name}</div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>{item.name}</span>
+                      {item.is_spare && <Badge tone="warning">Spare</Badge>}
+                    </div>
                     <div className="truncate text-[12px]" style={{ color: "var(--text-3)" }}>
                       {path}{hintLabel(item) ? ` · ${hintLabel(item)}` : ""}
                     </div>
@@ -920,7 +974,6 @@ function EditLineModal({
 }) {
   // Trip-level fields. unit/resp are the raw overrides — "" = inherit.
   const [qty, setQty] = useState(line.quantity == null ? "" : String(line.quantity));
-  const [spareQty, setSpareQty] = useState(line.spare_quantity == null ? "" : String(line.spare_quantity));
   const [unit, setUnit] = useState(line.unit ?? "");
   const [resp, setResp] = useState<Responsibility | "">(line.responsibility ?? "");
   const [assignee, setAssignee] = useState(line.assignee_participant_id ?? "");
@@ -934,7 +987,7 @@ function EditLineModal({
   const [subcategory, setSubcategory] = useState(line.item.subcategory ?? "");
   const [defUnit, setDefUnit] = useState(line.item.default_unit ?? "");
   const [defResp, setDefResp] = useState<Responsibility>(line.item.default_responsibility);
-  const [defSpareQty, setDefSpareQty] = useState(line.item.default_spare_qty == null ? "" : String(line.item.default_spare_qty));
+  const [isSpare, setIsSpare] = useState(line.item.is_spare);
   const [defQty, setDefQty] = useState(line.item.default_qty == null ? "" : String(line.item.default_qty));
   const [basis, setBasis] = useState<QtyBasis>(line.item.qty_basis);
   const [period, setPeriod] = useState<QtyPeriod>(line.item.qty_period);
@@ -945,8 +998,6 @@ function EditLineModal({
     const lineBody: Record<string, unknown> = {};
     const nQty = qty === "" ? null : Number(qty);
     if (nQty !== line.quantity) lineBody.quantity = nQty;
-    const nSpareQty = spareQty === "" ? null : Number(spareQty);
-    if (nSpareQty !== line.spare_quantity) lineBody.spare_quantity = nSpareQty;
     if ((unit.trim() || null) !== line.unit) lineBody.unit = unit.trim() || null;
     if ((resp || null) !== line.responsibility) lineBody.responsibility = resp || null;
     if ((assignee || null) !== line.assignee_participant_id) lineBody.assignee_participant_id = assignee || null;
@@ -961,8 +1012,7 @@ function EditLineModal({
     if ((subcategory.trim() || null) !== line.item.subcategory) itemBody.subcategory = subcategory.trim() || null;
     if ((defUnit.trim() || null) !== line.item.default_unit) itemBody.default_unit = defUnit.trim() || null;
     if (defResp !== line.item.default_responsibility) itemBody.default_responsibility = defResp;
-    const nDefSpareQty = defSpareQty === "" ? null : Number(defSpareQty);
-    if (nDefSpareQty !== line.item.default_spare_qty) itemBody.default_spare_qty = nDefSpareQty;
+    if (isSpare !== line.item.is_spare) itemBody.is_spare = isSpare;
     const nDefQty = defQty === "" ? null : Number(defQty);
     if (nDefQty !== line.item.default_qty) itemBody.default_qty = nDefQty;
     if (basis !== line.item.qty_basis) itemBody.qty_basis = basis;
@@ -1001,7 +1051,7 @@ function EditLineModal({
           <Field label="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
           <Field label="Subcategory" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="Hint qty" type="number" value={defQty} onChange={(e) => setDefQty(e.target.value)} />
           <Field label="Unit" value={defUnit} onChange={(e) => setDefUnit(e.target.value)} placeholder="oz / lbs / —" />
           <SelectField label="Per" value={basis} onChange={(v) => setBasis(v as QtyBasis)}
@@ -1014,22 +1064,22 @@ function EditLineModal({
             ]} />
           <SelectField label="Over" value={period} onChange={(v) => setPeriod(v as QtyPeriod)}
             options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
-          <Field label="Spares" type="number" value={defSpareQty}
-            onChange={(e) => setDefSpareQty(e.target.value)} placeholder="0" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SelectField label="Who brings it" value={defResp} onChange={(v) => setDefResp(v as Responsibility)}
             options={[["shared", "Shared"], ["personal", "Personal"], ["personal_stored", "Stored @ HQ"]]} />
           <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
         </div>
+        <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
+          <input type="checkbox" checked={isSpare} onChange={(e) => setIsSpare(e.target.checked)} />
+          Spare — a backup item, not part of the working set
+        </label>
 
         <div className="text-[12px] font-bold uppercase mt-2" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
           This trip <span className="normal-case font-normal" style={{ letterSpacing: 0 }}>— overrides apply to this trip only</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="Quantity" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
-          <Field label="Spares" type="number" value={spareQty} onChange={(e) => setSpareQty(e.target.value)}
-            placeholder={line.item.default_spare_qty != null ? `Suggested ${fmtQty(line.item.default_spare_qty)}` : "0"} />
           <SelectField label="Week" value={segmentId} onChange={setSegmentId}
             options={[["", "Whole trip"], ...segments.map((s) => [s.id, s.name] as [string, string])]} />
           <Field label="Unit (override)" value={unit} onChange={(e) => setUnit(e.target.value)}

@@ -77,10 +77,9 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-/** "0.25 loaves / person / day · +1 spare" — how the hint reads in the UI. */
+/** "0.25 loaves / person / day" — how the hint reads in the UI. */
 export function hintLabel(item: InventoryItem): string | null {
-  const spare = item.default_spare_qty ? `+${fmtQty(item.default_spare_qty)} spare` : null;
-  if (item.default_qty == null) return spare;
+  if (item.default_qty == null) return null;
   const basis = {
     per_person: "person",
     per_person_peak: "person (peak week)",
@@ -90,12 +89,7 @@ export function hintLabel(item: InventoryItem): string | null {
   }[item.qty_basis];
   const unit = item.default_unit ? ` ${item.default_unit}` : "";
   const per = item.qty_period === "per_day" ? ` / ${basis} / day` : ` / ${basis}`;
-  return `${fmtQty(item.default_qty)}${unit}${per}${spare ? ` · ${spare}` : ""}`;
-}
-
-/** Spares for this trip: the confirmed count, else the master's hint. */
-export function effectiveSpares(line: PackLine): number {
-  return line.spare_quantity ?? line.item.default_spare_qty ?? 0;
+  return `${fmtQty(item.default_qty)}${unit}${per}`;
 }
 
 export function fmtQty(n: number): string {
