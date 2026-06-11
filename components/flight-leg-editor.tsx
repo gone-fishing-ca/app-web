@@ -324,7 +324,11 @@ export function FlightLegEditor({
                 ...(suggestedTitle && !suggestedMatch
                   ? [{ value: NEW_ITEM, label: `New: ${suggestedTitle}`, hint: legDate }]
                   : []),
-                ...flightItems.map((it) => ({ value: it.id, label: it.title, hint: it.item_date })),
+                // Only same-day milestones make sense to link; keep the current
+                // selection visible even if its date differs.
+                ...flightItems
+                  .filter((it) => !legDate || it.item_date === legDate || it.id === itemId)
+                  .map((it) => ({ value: it.id, label: it.title, hint: it.item_date })),
               ]}
               onSelect={(v) => {
                 setLinkTouched(true);
