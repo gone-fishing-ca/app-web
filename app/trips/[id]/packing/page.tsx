@@ -29,7 +29,7 @@ import {
   type Trip,
   type TripLake,
 } from "@/lib/api";
-import { fmtQty, hintLabel, suggestQty, tripFacts } from "@/lib/packing";
+import { effectiveSpares, fmtQty, hintLabel, suggestQty, tripFacts } from "@/lib/packing";
 
 const RESP_LABEL: Record<Responsibility, string> = {
   shared: "Shared",
@@ -147,9 +147,9 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     }
   }
 
-  async function addUnits(line: PackLine, count: number, label?: string) {
+  async function addUnits(line: PackLine, count: number, isSpare = false) {
     try {
-      const created = await api.post<PackUnit[]>(`/trips/${tripId}/pack/${line.id}/units`, { count, label: label ?? null });
+      const created = await api.post<PackUnit[]>(`/trips/${tripId}/pack/${line.id}/units`, { count, is_spare: isSpare });
       setLines((prev) => prev?.map((l) => (l.id === line.id ? { ...l, units: [...l.units, ...created] } : l)) ?? null);
       setExpanded((prev) => new Set(prev).add(line.id));
     } catch (e) {
@@ -294,6 +294,9 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                         const suggestion = suggestQty(line.item, line.segment_id ? tripFacts(participants.length, segments, stays, line.segment_id) : facts);
                         const itemized = line.units.length > 0;
                         const isOpen = expanded.has(line.id);
+                        const spares = effectiveSpares(line);
+                        const spareUnits = line.units.filter((u) => u.is_spare).length;
+                        const workingUnits = line.units.length - spareUnits;
                         return (
                           <div key={line.id}>
                           <div className="grid items-center px-4 sm:px-5 py-2"
@@ -318,8 +321,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 style={{ background: "var(--accent-100)", color: "var(--accent-600)", border: "1px solid transparent" }}
                                 title="Show the individual units">
                                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                {line.units.length} units
-                                {suggestion != null && line.units.length === suggestion && <Check size={13} />}
+                                {workingUnits} units{spareUnits > 0 && ` · ${spareUnits} spare`}
+                                {suggestion != null && workingUnits === Math.round(suggestion) && <Check size={13} />}
                               </button>
                             ) : (
                             <div className="flex items-baseline gap-1.5">
@@ -340,6 +343,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               />
                               <span className="text-[12px] truncate" style={{ color: "var(--text-3)" }}>
                                 {line.effective_unit || (line.quantity == null && suggestion != null ? "suggested" : "")}
+                                {spares > 0 && <span style={{ color: "var(--accent-600)" }}> +{fmtQty(spares)} spare</span>}
                               </span>
                             </div>
                             )}
@@ -425,7 +429,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               stays={stays}
                               boxes={boxes}
                               suggestion={suggestion}
-                              onAdd={(count, label) => void addUnits(line, count, label)}
+                              spareSuggestion={spares}
+                              onAdd={(count, isSpare) => void addUnits(line, count, isSpare)}
                               onPatch={(unit, body) => void patchUnit(line, unit, body)}
                               onDelete={(unit) => void deleteUnit(line, unit)}
                               onAssign={(unit, segId, pid) => void assignUnit(line, unit, segId, pid)}
@@ -520,7 +525,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
 
 /* ---- Units: the itemized breakdown of one line ----------------------------- */
 function UnitPanel({
-  line, segments, participants, stays, boxes, suggestion, onAdd, onPatch, onDelete, onAssign,
+  line, segments, participants, stays, boxes, suggestion, spareSuggestion, onAdd, onPatch, onDelete, onAssign,
 }: {
   line: PackLine;
   segments: Segment[];
@@ -528,7 +533,8 @@ function UnitPanel({
   stays: Stay[];
   boxes: Box[];
   suggestion: number | null;
-  onAdd: (count: number, label?: string) => void;
+  spareSuggestion: number;
+  onAdd: (count: number, isSpare?: boolean) => void;
   onPatch: (unit: PackUnit, body: Record<string, unknown>) => void;
   onDelete: (unit: PackUnit) => void;
   onAssign: (unit: PackUnit, segmentId: string, participantId: string | null) => void;
@@ -542,8 +548,11 @@ function UnitPanel({
     return m;
   }, [segments, participants, stays]);
 
-  const remaining = suggestion != null ? Math.max(0, Math.round(suggestion) - line.units.length) : 0;
-  const cols = `minmax(130px,1.2fr) repeat(${segments.length}, minmax(130px,1fr)) 140px 34px`;
+  const workingCount = line.units.filter((u) => !u.is_spare).length;
+  const spareCount = line.units.length - workingCount;
+  const remaining = suggestion != null ? Math.max(0, Math.round(suggestion) - workingCount) : 0;
+  const spareRemaining = Math.max(0, Math.round(spareSuggestion) - spareCount);
+  const cols = `minmax(130px,1.2fr) repeat(${segments.length}, minmax(130px,1fr)) 140px 54px 34px`;
 
   return (
     <div className="px-4 sm:px-5 pb-3">
@@ -555,6 +564,7 @@ function UnitPanel({
             <span>Unit</span>
             {segments.map((s) => <span key={s.id}>{s.name}</span>)}
             <span>Box</span>
+            <span>Spare</span>
             <span />
           </div>
         )}
@@ -602,6 +612,13 @@ function UnitPanel({
               <option value="">No box</option>
               {boxes.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
             </select>
+            <input
+              type="checkbox"
+              checked={unit.is_spare}
+              onChange={(e) => onPatch(unit, { is_spare: e.target.checked })}
+              title="A backup — not part of the working set"
+              className="mx-auto"
+            />
             <button onClick={() => onDelete(unit)} title="Remove unit"
               className="grid place-items-center"
               style={{ width: 26, height: 26, borderRadius: 7, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
@@ -621,6 +638,13 @@ function UnitPanel({
               className="text-[12.5px] font-semibold"
               style={{ color: "var(--accent-600)" }}>
               Create {remaining} more (suggested {fmtQty(suggestion!)})
+            </button>
+          )}
+          {spareRemaining > 0 && (
+            <button onClick={() => onAdd(spareRemaining, true)}
+              className="text-[12.5px] font-semibold"
+              style={{ color: "var(--accent-600)" }}>
+              Add {spareRemaining} spare{spareRemaining > 1 ? "s" : ""}
             </button>
           )}
           {line.units.length === 0 && (
@@ -896,6 +920,7 @@ function EditLineModal({
 }) {
   // Trip-level fields. unit/resp are the raw overrides — "" = inherit.
   const [qty, setQty] = useState(line.quantity == null ? "" : String(line.quantity));
+  const [spareQty, setSpareQty] = useState(line.spare_quantity == null ? "" : String(line.spare_quantity));
   const [unit, setUnit] = useState(line.unit ?? "");
   const [resp, setResp] = useState<Responsibility | "">(line.responsibility ?? "");
   const [assignee, setAssignee] = useState(line.assignee_participant_id ?? "");
@@ -909,6 +934,7 @@ function EditLineModal({
   const [subcategory, setSubcategory] = useState(line.item.subcategory ?? "");
   const [defUnit, setDefUnit] = useState(line.item.default_unit ?? "");
   const [defResp, setDefResp] = useState<Responsibility>(line.item.default_responsibility);
+  const [defSpareQty, setDefSpareQty] = useState(line.item.default_spare_qty == null ? "" : String(line.item.default_spare_qty));
   const [defQty, setDefQty] = useState(line.item.default_qty == null ? "" : String(line.item.default_qty));
   const [basis, setBasis] = useState<QtyBasis>(line.item.qty_basis);
   const [period, setPeriod] = useState<QtyPeriod>(line.item.qty_period);
@@ -919,6 +945,8 @@ function EditLineModal({
     const lineBody: Record<string, unknown> = {};
     const nQty = qty === "" ? null : Number(qty);
     if (nQty !== line.quantity) lineBody.quantity = nQty;
+    const nSpareQty = spareQty === "" ? null : Number(spareQty);
+    if (nSpareQty !== line.spare_quantity) lineBody.spare_quantity = nSpareQty;
     if ((unit.trim() || null) !== line.unit) lineBody.unit = unit.trim() || null;
     if ((resp || null) !== line.responsibility) lineBody.responsibility = resp || null;
     if ((assignee || null) !== line.assignee_participant_id) lineBody.assignee_participant_id = assignee || null;
@@ -933,6 +961,8 @@ function EditLineModal({
     if ((subcategory.trim() || null) !== line.item.subcategory) itemBody.subcategory = subcategory.trim() || null;
     if ((defUnit.trim() || null) !== line.item.default_unit) itemBody.default_unit = defUnit.trim() || null;
     if (defResp !== line.item.default_responsibility) itemBody.default_responsibility = defResp;
+    const nDefSpareQty = defSpareQty === "" ? null : Number(defSpareQty);
+    if (nDefSpareQty !== line.item.default_spare_qty) itemBody.default_spare_qty = nDefSpareQty;
     const nDefQty = defQty === "" ? null : Number(defQty);
     if (nDefQty !== line.item.default_qty) itemBody.default_qty = nDefQty;
     if (basis !== line.item.qty_basis) itemBody.qty_basis = basis;
@@ -971,7 +1001,7 @@ function EditLineModal({
           <Field label="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
           <Field label="Subcategory" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <Field label="Hint qty" type="number" value={defQty} onChange={(e) => setDefQty(e.target.value)} />
           <Field label="Unit" value={defUnit} onChange={(e) => setDefUnit(e.target.value)} placeholder="oz / lbs / —" />
           <SelectField label="Per" value={basis} onChange={(v) => setBasis(v as QtyBasis)}
@@ -984,6 +1014,8 @@ function EditLineModal({
             ]} />
           <SelectField label="Over" value={period} onChange={(v) => setPeriod(v as QtyPeriod)}
             options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
+          <Field label="Spares" type="number" value={defSpareQty}
+            onChange={(e) => setDefSpareQty(e.target.value)} placeholder="0" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SelectField label="Who brings it" value={defResp} onChange={(v) => setDefResp(v as Responsibility)}
@@ -996,6 +1028,8 @@ function EditLineModal({
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="Quantity" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
+          <Field label="Spares" type="number" value={spareQty} onChange={(e) => setSpareQty(e.target.value)}
+            placeholder={line.item.default_spare_qty != null ? `Suggested ${fmtQty(line.item.default_spare_qty)}` : "0"} />
           <SelectField label="Week" value={segmentId} onChange={setSegmentId}
             options={[["", "Whole trip"], ...segments.map((s) => [s.id, s.name] as [string, string])]} />
           <Field label="Unit (override)" value={unit} onChange={(e) => setUnit(e.target.value)}

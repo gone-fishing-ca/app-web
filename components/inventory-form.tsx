@@ -22,6 +22,7 @@ export type ItemDraft = {
   qty: string; // text — "" = no hint
   basis: QtyBasis;
   period: QtyPeriod;
+  spareQty: string; // text — "" = no spares
   responsibility: Responsibility;
   notes: string;
 };
@@ -29,7 +30,7 @@ export type ItemDraft = {
 export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDraft {
   return {
     name: name.trim(), item_type: type, category: "", subcategory: "",
-    unit: "", qty: "", basis: "per_person", period: "per_trip",
+    unit: "", qty: "", basis: "per_person", period: "per_trip", spareQty: "",
     responsibility: "shared", notes: "",
   };
 }
@@ -44,6 +45,7 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     qty: item.default_qty == null ? "" : String(item.default_qty),
     basis: item.qty_basis,
     period: item.qty_period,
+    spareQty: item.default_spare_qty == null ? "" : String(item.default_spare_qty),
     responsibility: item.default_responsibility,
     notes: item.notes ?? "",
   };
@@ -60,6 +62,7 @@ export function itemBodyFromDraft(d: ItemDraft) {
     default_qty: d.qty === "" ? null : Number(d.qty),
     qty_basis: d.basis,
     qty_period: d.period,
+    default_spare_qty: d.spareQty === "" ? null : Number(d.spareQty),
     default_responsibility: d.responsibility,
     notes: d.notes.trim() || null,
   };
@@ -106,8 +109,9 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [] 
       </div>
       <div className="text-[12px] -mb-1" style={{ color: "var(--text-3)" }}>
         Quantity hint — used to suggest amounts from a trip&apos;s people, cabins, and days.
+        Spares are backups on top of that, a flat count per trip.
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Field label="Qty" type="number" value={draft.qty} onChange={(e) => setDraft({ ...draft, qty: e.target.value })} placeholder="1" />
         <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="oz / lbs / —" />
         <SelectField label="Per" value={draft.basis} onChange={(v) => setDraft({ ...draft, basis: v as QtyBasis })}
@@ -120,6 +124,8 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [] 
           ]} />
         <SelectField label="Over" value={draft.period} onChange={(v) => setDraft({ ...draft, period: v as QtyPeriod })}
           options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
+        <Field label="Spares" type="number" value={draft.spareQty}
+          onChange={(e) => setDraft({ ...draft, spareQty: e.target.value })} placeholder="0" />
       </div>
       <SelectField label="Who brings it (default)" value={draft.responsibility}
         onChange={(v) => setDraft({ ...draft, responsibility: v as Responsibility })}
