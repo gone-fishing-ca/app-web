@@ -443,23 +443,21 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                             </div>
                             )}
 
-                            {/* personal vs shared — inherits from the master item unless overridden */}
-                            <select
-                              value={line.personal == null ? "" : line.personal ? "personal" : "shared"}
-                              onChange={(e) => void patchLine(line, { personal: e.target.value === "" ? null : e.target.value === "personal" })}
-                              title={line.personal != null ? "Overridden for this trip — pick the default to reset" : "Following the inventory item's default"}
-                              className="rounded-[9px] px-2 py-1.5 text-[12.5px] font-semibold"
+                            {/* personal vs shared — display only; the rare per-trip
+                                flip lives in Edit ("Personal (override)") */}
+                            <span
+                              className="inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11.5px] font-bold"
+                              title={line.personal != null
+                                ? "Overridden for this trip — change in Edit"
+                                : "From the inventory item — change in Edit"}
                               style={{
                                 background: "var(--surface-2)",
                                 border: `1px solid ${line.personal != null ? "var(--accent)" : "var(--border)"}`,
                                 color: "var(--text-2)",
                               }}
                             >
-                              <option value="">{line.item.is_personal ? "Personal" : "Shared"}</option>
-                              <option value={line.item.is_personal ? "shared" : "personal"}>
-                                {line.item.is_personal ? "Shared" : "Personal"} (this trip)
-                              </option>
-                            </select>
+                              {line.effective_personal ? "Personal" : "Shared"}
+                            </span>
 
                             {/* packed-by (shared) / people summary (personal) */}
                             {!line.effective_personal ? (

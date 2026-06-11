@@ -75,6 +75,20 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
 
   const segName = useMemo(() => new Map(segments.map((s) => [s.id, s.name])), [segments]);
 
+  // Prefs grouped under thin "Type — Category — Subcategory" headers. Lines
+  // arrive server-ordered by that taxonomy, so consecutive grouping holds.
+  const prefGroups = useMemo(() => {
+    const groups: { label: string; lines: PackLine[] }[] = [];
+    for (const l of prefs) {
+      const label = [l.item.item_type, l.item.category, l.item.subcategory]
+        .filter(Boolean).join(" — ");
+      const last = groups[groups.length - 1];
+      if (last && last.label === label) last.lines.push(l);
+      else groups.push({ label, lines: [l] });
+    }
+    return groups;
+  }, [prefs]);
+
   async function setPerson(line: PackLine, body: { packed?: boolean; source?: "self" | "stored" | null; pref_qty?: number | null }) {
     if (!participantId) return;
     try {
@@ -96,6 +110,29 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
     } catch (e) {
       setError(errMsg(e, "Save failed"));
     }
+  }
+
+  /** Set a pref optimistically, so rapid +/- taps step from the latest value
+   *  instead of racing the server round trip. */
+  function setPref(line: PackLine, v: number | null) {
+    if (!participantId) return;
+    setLines((prev) => prev?.map((l) => {
+      if (l.id !== line.id) return l;
+      const existing = l.people.find((pp) => pp.participant_id === participantId);
+      const row: PackPerson = existing
+        ? { ...existing, pref_qty: v }
+        : { id: `tmp-${l.id}-${participantId}`, pack_item_id: l.id,
+            participant_id: participantId, source: null, pref_qty: v, packed: false };
+      return { ...l, people: [...l.people.filter((pp) => pp.participant_id !== participantId), row] };
+    }) ?? null);
+    void setPerson(line, { pref_qty: v });
+  }
+
+  function bumpPref(line: PackLine, delta: number) {
+    const current = participantId ? personRow(line, participantId)?.pref_qty ?? null : null;
+    // First tap on an unanswered line: "+" starts at 1, "−" answers 0 (none for me).
+    const next = current == null ? Math.max(0, delta) : Math.max(0, current + delta);
+    if (next !== current) setPref(line, next);
   }
 
   const packedOf = (list: PackLine[]) =>
@@ -224,39 +261,67 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
                   {prefs.filter((l) => (personRow(l, participantId)?.pref_qty ?? null) != null).length} / {prefs.length} answered
                 </Badge>
               </div>
-              {prefs.map((line) => {
-                const row = participantId ? personRow(line, participantId) : null;
-                const sub = line.notes || line.item.notes || null;
-                return (
-                  <div key={line.id} className="flex items-center gap-3 px-4 sm:px-5 py-2.5"
-                    style={{ borderTop: "1px solid var(--border)" }}>
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>
-                        {line.item.name}
-                      </div>
-                      {sub && <div className="truncate text-[12px]" style={{ color: "var(--text-3)" }}>{sub}</div>}
-                    </div>
-                    <input
-                      key={`${line.id}-${participantId}`}
-                      type="number" inputMode="decimal" min={0} step="any"
-                      defaultValue={row?.pref_qty ?? ""}
-                      placeholder="—"
-                      onBlur={(e) => {
-                        const v = e.target.value === "" ? null : Number(e.target.value);
-                        if (v !== (row?.pref_qty ?? null)) void setPerson(line, { pref_qty: v });
-                      }}
-                      className="w-[64px] flex-none rounded-[9px] px-2 py-1.5 text-[13.5px] text-right gf-mono outline-none"
-                      style={{
-                        background: "var(--surface)", border: "1px solid var(--border-strong)",
-                        color: row?.pref_qty == null ? "var(--text-3)" : "var(--text)",
-                      }}
-                    />
-                    {line.effective_unit && (
-                      <span className="text-[12px] flex-none" style={{ color: "var(--text-3)" }}>{line.effective_unit}</span>
-                    )}
+              {prefGroups.map((group) => (
+                <div key={group.label}>
+                  {/* thin taxonomy band — the subcategory header style from the packing list */}
+                  <div className="px-4 sm:px-5 py-1" style={{ background: "var(--primary-100)" }}>
+                    <span className="block truncate text-[11px] font-bold uppercase"
+                      style={{ letterSpacing: ".05em", color: "var(--primary)" }}>
+                      {group.label}
+                    </span>
                   </div>
-                );
-              })}
+                  {group.lines.map((line) => {
+                    const row = participantId ? personRow(line, participantId) : null;
+                    const sub = line.notes || line.item.notes || null;
+                    return (
+                      <div key={line.id} className="flex items-center gap-3 px-4 sm:px-5 py-2"
+                        style={{ borderTop: "1px solid var(--border)" }}>
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>
+                            {line.item.name}
+                          </div>
+                          {sub && <div className="truncate text-[12px]" style={{ color: "var(--text-3)" }}>{sub}</div>}
+                        </div>
+                        {/* − [count] + stepper; typing still works, saved on blur */}
+                        <div className="flex items-stretch flex-none rounded-[9px] overflow-hidden"
+                          style={{ border: "1px solid var(--border-strong)" }}>
+                          <button onClick={() => bumpPref(line, -1)} title="Fewer (0 = none for me)"
+                            className="grid place-items-center"
+                            style={{ width: 30, background: "var(--surface-2)", color: "var(--text-2)", borderRight: "1px solid var(--border)" }}>
+                            −
+                          </button>
+                          <input
+                            key={`${line.id}-${participantId}-${row?.pref_qty ?? "ø"}`}
+                            type="number" inputMode="decimal" min={0} step="any"
+                            defaultValue={row?.pref_qty ?? ""}
+                            placeholder="—"
+                            onBlur={(e) => {
+                              const v = e.target.value === "" ? null : Number(e.target.value);
+                              if (v !== (row?.pref_qty ?? null)) setPref(line, v);
+                            }}
+                            className="w-[46px] py-1.5 text-[13.5px] text-center gf-mono outline-none"
+                            style={{
+                              background: "var(--surface)", border: "none",
+                              color: row?.pref_qty == null ? "var(--text-3)" : "var(--text)",
+                            }}
+                          />
+                          <button onClick={() => bumpPref(line, 1)} title="More"
+                            className="grid place-items-center"
+                            style={{ width: 30, background: "var(--surface-2)", color: "var(--text-2)", borderLeft: "1px solid var(--border)" }}>
+                            +
+                          </button>
+                        </div>
+                        {/* fixed-width unit slot so the steppers align down the column */}
+                        <span className="w-[64px] flex-none truncate text-[12px]"
+                          title={line.effective_unit ?? undefined}
+                          style={{ color: "var(--text-3)" }}>
+                          {line.effective_unit ?? ""}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </Card>
           )}
           <Section icon={Luggage} title="You bring" flip="stored"
