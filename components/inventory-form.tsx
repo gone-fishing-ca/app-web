@@ -28,9 +28,11 @@ export type ItemDraft = {
 };
 
 export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDraft {
+  // 1 / group / trip is the most common hint — most items are one-offs the
+  // group brings once.
   return {
     name: name.trim(), item_type: type, category: "", subcategory: "",
-    unit: "", qty: "", basis: "per_person", period: "per_trip", isSpare: false,
+    unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
     responsibility: "shared", notes: "",
   };
 }
