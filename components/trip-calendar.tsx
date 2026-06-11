@@ -187,6 +187,7 @@ function DayCell({
 
 function ItemChip({ item, onClick }: { item: ItineraryItem; onClick: () => void }) {
   const m = KIND_META[item.kind];
+  const count = item.participant_ids.length;
   return (
     <button
       onClick={onClick}
@@ -196,6 +197,7 @@ function ItemChip({ item, onClick }: { item: ItineraryItem; onClick: () => void 
     >
       <m.Icon size={12} strokeWidth={2.2} className="flex-none" />
       <span className="truncate">{item.title}</span>
+      {count > 0 && <span className="ml-auto flex-none tabular-nums">{count}</span>}
     </button>
   );
 }
@@ -222,7 +224,8 @@ function FlyChip({
       style={style}
     >
       <Icon size={12} strokeWidth={2.2} className="flex-none" />
-      <span className="truncate">{label}</span>
+      {/* Phones: the icon does the talking — a truncated "Fly in" reads as "F". */}
+      <span className="hidden truncate sm:inline">{label}</span>
       {count > 0 && <span className="ml-auto flex-none tabular-nums">{count}</span>}
     </span>
   );

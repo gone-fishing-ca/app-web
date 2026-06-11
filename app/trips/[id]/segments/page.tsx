@@ -63,10 +63,6 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   }, [tripId]);
 
   const dayItems = useMemo(() => aggregateItinerary(items), [items]);
-  const itineraryDays = useMemo(
-    () => Array.from(dayItems.entries()).sort(([a], [b]) => a.localeCompare(b)),
-    [dayItems],
-  );
 
   const { spanStart, spanEnd, gridStart, gridEnd } = useMemo(
     () => scheduleRange(stays, tripLakes, items.map((it) => it.item_date)),
@@ -79,6 +75,12 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   const dayFly = useMemo(
     () => aggregateFlyEvents({ stays, participants, tripLakes, segments: segments ?? [] }),
     [stays, participants, tripLakes, segments],
+  );
+
+  // The itinerary list covers fly days too, so it's the full day-by-day plan.
+  const itineraryDays = useMemo(
+    () => Array.from(new Set([...dayItems.keys(), ...dayFly.keys()])).sort(),
+    [dayItems, dayFly],
   );
 
   const { bars: segmentBars, laneCount } = useMemo(
@@ -201,8 +203,11 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
             ) : (
               <ItineraryList
                 days={itineraryDays}
+                dayItems={dayItems}
+                dayFly={dayFly}
                 participants={participants}
                 onPickItem={(item) => setEditor({ mode: "edit", item })}
+                onPickDay={setSelectedDay}
               />
             )}
           </div>
