@@ -89,14 +89,16 @@ export function SelectField({ label, value, options, onChange }: {
   );
 }
 
-export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], locations = [] }: {
+export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], locations = [], onManageLocations }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   autoFocusName?: boolean;
   /** Existing category names for the chosen type — lightweight autocomplete. */
   categoryHints?: string[];
-  /** Storage locations for the "Stored at" select (omit to hide the field). */
+  /** Storage locations for the "Stored at" select. */
   locations?: StorageLocation[];
+  /** Opens the storage-locations manager (shown as a link under the select). */
+  onManageLocations?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -144,12 +146,23 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
           ["personal", "Personal — everyone brings their own"],
           ["personal_stored", "Personal, stored at HQ between trips"],
         ]} />
-      {locations.length > 0 && (
+      <div className="flex flex-col gap-1">
         <SelectField label="Stored at (between trips)" value={draft.storageLocationId}
           onChange={(v) => setDraft({ ...draft, storageLocationId: v })}
-          options={[["", "Nowhere in particular"],
-            ...locations.map((l): [string, string] => [l.id, l.name])]} />
-      )}
+          options={[
+            ["", locations.length > 0 ? "Nowhere in particular" : "No locations yet"],
+            ...locations.map((l): [string, string] => [l.id, l.name]),
+          ]} />
+        <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
+          {onManageLocations ? (
+            <button type="button" onClick={onManageLocations} style={{ color: "var(--accent-600)", fontWeight: 600 }}>
+              Manage storage locations…
+            </button>
+          ) : (
+            <>Locations (and who packs from them) are managed on the Inventory page.</>
+          )}
+        </span>
+      </div>
       <Field label="Notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
         placeholder="Bring 2 — they break" />
     </div>

@@ -1163,17 +1163,18 @@ function EditLineModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SelectField label="Who brings it" value={defResp} onChange={(v) => setDefResp(v as Responsibility)}
             options={[["shared", "Shared"], ["personal", "Personal"], ["personal_stored", "Stored @ HQ"]]} />
-          {locations.length > 0 ? (
-            <SelectField label="Stored at (between trips)" value={storedAt} onChange={setStoredAt}
-              options={[["", "Nowhere in particular"],
-                ...locations.map((l): [string, string] => [l.id, l.name])]} />
-          ) : (
-            <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
-          )}
+          <SelectField label="Stored at (between trips)" value={storedAt} onChange={setStoredAt}
+            options={[
+              ["", locations.length > 0 ? "Nowhere in particular" : "No locations yet"],
+              ...locations.map((l): [string, string] => [l.id, l.name]),
+            ]} />
         </div>
-        {locations.length > 0 && (
-          <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
+        {locations.length === 0 && (
+          <div className="-mt-2 text-[12px]" style={{ color: "var(--text-3)" }}>
+            Storage locations (and who packs from them) are managed on the Inventory page.
+          </div>
         )}
+        <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
           <input type="checkbox" checked={isSpare} onChange={(e) => setIsSpare(e.target.checked)} />
           Spare — a backup item, not part of the working set

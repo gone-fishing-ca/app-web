@@ -326,7 +326,8 @@ export default function InventoryPage() {
           }
         >
           <ItemFields draft={editing.draft} setDraft={(d) => setEditing({ ...editing, draft: d })}
-            autoFocusName={!editing.item} categoryHints={categoryHints} locations={locations} />
+            autoFocusName={!editing.item} categoryHints={categoryHints} locations={locations}
+            onManageLocations={() => setLocOpen(true)} />
         </ModalShell>
       )}
 
