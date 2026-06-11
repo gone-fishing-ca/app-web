@@ -274,6 +274,18 @@ export type Responsibility = "shared" | "personal" | "personal_stored";
 export type PackLineStatus = "planned" | "purchased" | "packed";
 export type PackSource = "self" | "stored";
 
+/** Where inventory lives between trips ("Greg's House"). Owner-scoped catalog;
+ *  the responsible contact is the default "packed by" when a stored item is
+ *  added to a trip's list (resolved to a roster row client-side at add time). */
+export type StorageLocation = {
+  id: string;
+  owner_id: string;
+  name: string;
+  responsible_contact_id: string | null;
+  notes: string | null;
+  archived: boolean;
+};
+
 /** A master-inventory item — the reusable, owner-scoped catalog grown across
  *  years of trips. `item_type` is the fixed top level; category/subcategory are
  *  free text. The qty fields are a *hint* used to suggest amounts from trip
@@ -291,6 +303,8 @@ export type InventoryItem = {
   qty_period: QtyPeriod;
   is_spare: boolean; // a backup item, not part of the working set — badged, sorted last
   default_responsibility: Responsibility;
+  storage_location_id: string | null;
+  storage_location: StorageLocation | null; // embedded for display + packer defaulting
   notes: string | null;
   archived: boolean;
 };
@@ -324,12 +338,16 @@ export type PackUnitAssignment = {
   participant_id: string;
 };
 
-/** One distinguishable unit of an itemized line — "Blue", "Ron's". When a line
- *  has units, its effective quantity is the unit count. */
+/** One distinguishable *portion* of an itemized line — a labeled physical unit
+ *  ("Blue", quantity null = 1) or a split ("12 of the 24 AA batteries",
+ *  quantity 12, owned by a cabin). When a line has units, its effective
+ *  quantity is the sum of unit quantities (null counts as 1). */
 export type PackUnit = {
   id: string;
   pack_item_id: string;
   label: string | null;
+  quantity: number | null; // null = one physical unit
+  cabin_id: string | null; // cabin this portion belongs to (null = not cabin-owned)
   box_id: string | null;
   notes: string | null;
   sort_order: number;
@@ -352,7 +370,11 @@ export type PackLine = {
   responsibility: Responsibility | null;
   effective_unit: string | null;
   effective_responsibility: Responsibility;
+  // Who *packs* it ("Packed by") vs who it *belongs to* on the trip: a person
+  // or a cabin, at most one — both null = the group's.
   assignee_participant_id: string | null;
+  owner_participant_id: string | null;
+  owner_cabin_id: string | null;
   segment_id: string | null;
   status: PackLineStatus;
   notes: string | null;

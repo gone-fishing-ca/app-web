@@ -8,6 +8,7 @@ import {
   type QtyBasis,
   type QtyPeriod,
   type Responsibility,
+  type StorageLocation,
 } from "@/lib/api";
 
 /* Shared editor state + field grid for a master inventory item — used by the
@@ -24,6 +25,7 @@ export type ItemDraft = {
   period: QtyPeriod;
   isSpare: boolean; // a backup item, not part of the working set
   responsibility: Responsibility;
+  storageLocationId: string; // "" = nowhere in particular
   notes: string;
 };
 
@@ -33,7 +35,7 @@ export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDra
   return {
     name: name.trim(), item_type: type, category: "", subcategory: "",
     unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
-    responsibility: "shared", notes: "",
+    responsibility: "shared", storageLocationId: "", notes: "",
   };
 }
 
@@ -49,6 +51,7 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     period: item.qty_period,
     isSpare: item.is_spare,
     responsibility: item.default_responsibility,
+    storageLocationId: item.storage_location_id ?? "",
     notes: item.notes ?? "",
   };
 }
@@ -66,6 +69,7 @@ export function itemBodyFromDraft(d: ItemDraft) {
     qty_period: d.period,
     is_spare: d.isSpare,
     default_responsibility: d.responsibility,
+    storage_location_id: d.storageLocationId || null,
     notes: d.notes.trim() || null,
   };
 }
@@ -85,12 +89,14 @@ export function SelectField({ label, value, options, onChange }: {
   );
 }
 
-export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [] }: {
+export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], locations = [] }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   autoFocusName?: boolean;
   /** Existing category names for the chosen type — lightweight autocomplete. */
   categoryHints?: string[];
+  /** Storage locations for the "Stored at" select (omit to hide the field). */
+  locations?: StorageLocation[];
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -138,6 +144,12 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [] 
           ["personal", "Personal — everyone brings their own"],
           ["personal_stored", "Personal, stored at HQ between trips"],
         ]} />
+      {locations.length > 0 && (
+        <SelectField label="Stored at (between trips)" value={draft.storageLocationId}
+          onChange={(v) => setDraft({ ...draft, storageLocationId: v })}
+          options={[["", "Nowhere in particular"],
+            ...locations.map((l): [string, string] => [l.id, l.name])]} />
+      )}
       <Field label="Notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
         placeholder="Bring 2 — they break" />
     </div>

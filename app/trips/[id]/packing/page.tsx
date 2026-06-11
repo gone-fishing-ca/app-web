@@ -27,10 +27,11 @@ import {
   type Responsibility,
   type Segment,
   type Stay,
+  type StorageLocation,
   type Trip,
   type TripLake,
 } from "@/lib/api";
-import { fmtQty, hintLabel, suggestQty, tripFacts } from "@/lib/packing";
+import { fmtQty, hintLabel, suggestQty, tripFacts, unitsTotal } from "@/lib/packing";
 
 const RESP_LABEL: Record<Responsibility, string> = {
   shared: "Shared",
@@ -64,6 +65,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   const [otherTrips, setOtherTrips] = useState<Trip[]>([]);
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [tripLakes, setTripLakes] = useState<TripLake[]>([]);
+  const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
   const [addOpen, setAddOpen] = useState(false);
   // Scope for a header-launched "Add" — pre-filters the browser and prefills creation.
@@ -86,6 +88,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
     api.get<Box[]>(`/trips/${tripId}/boxes`).then(setBoxes).catch(() => {});
     api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setTripLakes).catch(() => {});
+    api.get<StorageLocation[]>(`/storage-locations`).then(setLocations).catch(() => {});
     api.get<Trip[]>(`/trips`).then((ts) => setOtherTrips(ts.filter((t) => t.id !== tripId))).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
@@ -109,6 +112,27 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
 
   const facts = useMemo(() => tripFacts(participants.length, segments, stays), [participants, segments, stays]);
   const segName = useMemo(() => new Map(segments.map((s) => [s.id, s.name])), [segments]);
+  const cabins = useMemo(
+    () => tripLakes.flatMap((l) => l.cabins.map((c) => ({ id: c.id, name: tripLakes.length > 1 ? `${c.name} — ${l.name}` : c.name }))),
+    [tripLakes],
+  );
+
+  /** "Belongs to" on the trip — a person's, a cabin's, or null = the group's. */
+  function ownerLabel(line: PackLine): string | null {
+    if (line.owner_participant_id) {
+      return participants.find((p) => p.id === line.owner_participant_id)?.name ?? null;
+    }
+    if (line.owner_cabin_id) return cabins.find((c) => c.id === line.owner_cabin_id)?.name ?? null;
+    return null;
+  }
+
+  /** Default "Packed by" for an item stored somewhere: the location's
+   *  responsible contact, when that person is on this trip's roster. */
+  function defaultPacker(item: InventoryItem): string | null {
+    const contactId = item.storage_location?.responsible_contact_id;
+    if (!contactId) return null;
+    return participants.find((p) => p.contact_id === contactId)?.id ?? null;
+  }
 
   const filtered = useMemo(
     () => (lines ?? []).filter((l) => typeFilter === "All" || l.item.item_type === typeFilter),
@@ -334,6 +358,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                           {subOpen && group.map((line) => {
                         const suggestion = suggestQty(line.item, line.segment_id ? tripFacts(participants.length, segments, stays, line.segment_id) : facts);
                         const itemized = line.units.length > 0;
+                        const unitQty = unitsTotal(line.units);
+                        const owner = ownerLabel(line);
                         const isOpen = expanded.has(line.id);
                         return (
                           <div key={line.id}>
@@ -345,6 +371,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 <span className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>{line.item.name}</span>
                                 {line.item.is_spare && <Badge tone="warning">Spare</Badge>}
                                 {line.segment_id && <Badge tone="info">{segName.get(line.segment_id) ?? "Week"}</Badge>}
+                                {owner && <Badge tone="neutral">{owner}&rsquo;s</Badge>}
                               </div>
                               {(line.notes || line.item.notes || hintLabel(line.item)) && (
                                 <div className="truncate text-[12px] mt-0.5" style={{ color: "var(--text-3)" }}>
@@ -360,8 +387,10 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 style={{ background: "var(--accent-100)", color: "var(--accent-600)", border: "1px solid transparent" }}
                                 title="Show the individual units">
                                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                {line.units.length} units
-                                {suggestion != null && line.units.length === Math.round(suggestion) && <Check size={13} />}
+                                {unitQty === line.units.length
+                                  ? `${line.units.length} units`
+                                  : `${fmtQty(unitQty)} in ${line.units.length}`}
+                                {suggestion != null && unitQty === Math.round(suggestion) && <Check size={13} />}
                               </button>
                             ) : (
                             <div className="flex items-baseline gap-1.5">
@@ -406,18 +435,19 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 ))}
                             </select>
 
-                            {/* assignee (shared) / people summary (personal) */}
+                            {/* packed-by (shared) / people summary (personal) */}
                             {line.effective_responsibility === "shared" ? (
                               <select
                                 value={line.assignee_participant_id ?? ""}
                                 onChange={(e) => void patchLine(line, { assignee_participant_id: e.target.value || null })}
+                                title="Who packs this — ownership lives in Edit"
                                 className="rounded-[9px] px-2 py-1.5 text-[12.5px] w-full min-w-0"
                                 style={{
                                   background: "var(--surface)", border: "1px solid var(--border)",
                                   color: line.assignee_participant_id ? "var(--text)" : "var(--text-3)",
                                 }}
                               >
-                                <option value="">Unassigned</option>
+                                <option value="">Packed by —</option>
                                 {participants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                               </select>
                             ) : (
@@ -466,6 +496,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               participants={participants}
                               stays={stays}
                               boxes={boxes}
+                              cabins={cabins}
                               suggestion={suggestion}
                               onAdd={(count) => void addUnits(line, count)}
                               onPatch={(unit, body) => void patchUnit(line, unit, body)}
@@ -498,6 +529,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           inventory={inventory}
           lines={lines ?? []}
           initial={addScope}
+          locations={locations}
+          defaultPacker={defaultPacker}
           onAdded={(line, item) => {
             setLines((prev) => (prev ? [...prev, line] : [line]));
             if (!inventory.some((i) => i.id === item.id)) setInventory((prev) => [...prev, item]);
@@ -522,6 +555,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           segments={segments}
           participants={participants}
           boxes={boxes}
+          cabins={cabins}
+          locations={locations}
           onSave={async (lineBody, itemBody) => {
             let ok = true;
             if (Object.keys(itemBody).length > 0) {
@@ -567,15 +602,19 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   );
 }
 
-/* ---- Units: the itemized breakdown of one line ----------------------------- */
+/* ---- Units: the itemized breakdown of one line ------------------------------
+   A unit is a labeled physical thing (a dry bag, qty blank = 1) or a split
+   portion ("12 of the 24 batteries" for one cabin). Person ownership is the
+   per-week selects (the handoff); cabin ownership is the Cabin column. */
 function UnitPanel({
-  line, segments, participants, stays, boxes, suggestion, onAdd, onPatch, onDelete, onAssign,
+  line, segments, participants, stays, boxes, cabins, suggestion, onAdd, onPatch, onDelete, onAssign,
 }: {
   line: PackLine;
   segments: Segment[];
   participants: Participant[];
   stays: Stay[];
   boxes: Box[];
+  cabins: { id: string; name: string }[];
   suggestion: number | null;
   onAdd: (count: number) => void;
   onPatch: (unit: PackUnit, body: Record<string, unknown>) => void;
@@ -591,8 +630,8 @@ function UnitPanel({
     return m;
   }, [segments, participants, stays]);
 
-  const remaining = suggestion != null ? Math.max(0, Math.round(suggestion) - line.units.length) : 0;
-  const cols = `minmax(130px,1.2fr) repeat(${segments.length}, minmax(130px,1fr)) 140px 34px`;
+  const remaining = suggestion != null ? Math.max(0, Math.round(suggestion) - unitsTotal(line.units)) : 0;
+  const cols = `minmax(120px,1.2fr) 58px repeat(${segments.length}, minmax(120px,1fr)) 130px 130px 34px`;
 
   return (
     <div className="px-4 sm:px-5 pb-3">
@@ -602,7 +641,9 @@ function UnitPanel({
           <div className="grid items-center gap-2 py-1 text-[11px] font-bold uppercase"
             style={{ gridTemplateColumns: cols, letterSpacing: ".05em", color: "var(--text-3)" }}>
             <span>Unit</span>
+            <span>Qty</span>
             {segments.map((s) => <span key={s.id}>{s.name}</span>)}
+            <span>Cabin</span>
             <span>Box</span>
             <span />
           </div>
@@ -619,6 +660,18 @@ function UnitPanel({
               }}
               className="rounded-[8px] px-2 py-1.5 text-[13px] outline-none min-w-0"
               style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+            />
+            <input
+              type="number" inputMode="decimal" min={0} step="any"
+              defaultValue={unit.quantity ?? ""}
+              placeholder="1"
+              title="Portion quantity — blank = one physical unit"
+              onBlur={(e) => {
+                const v = e.target.value === "" ? null : Number(e.target.value);
+                if (v !== unit.quantity) onPatch(unit, { quantity: v });
+              }}
+              className="rounded-[8px] px-2 py-1.5 text-[13px] text-right gf-mono outline-none min-w-0"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: unit.quantity == null ? "var(--text-3)" : "var(--text)" }}
             />
             {segments.map((seg) => {
               const assigned = unit.assignments.find((a) => a.segment_id === seg.id);
@@ -639,6 +692,19 @@ function UnitPanel({
                 </select>
               );
             })}
+            <select
+              value={unit.cabin_id ?? ""}
+              onChange={(e) => onPatch(unit, { cabin_id: e.target.value || null })}
+              title="Cabin this portion belongs to"
+              className="rounded-[8px] px-2 py-1.5 text-[12.5px] min-w-0"
+              style={{
+                background: "var(--surface)", border: "1px solid var(--border)",
+                color: unit.cabin_id ? "var(--text)" : "var(--text-3)",
+              }}
+            >
+              <option value="">No cabin</option>
+              {cabins.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
             <select
               value={unit.box_id ?? ""}
               onChange={(e) => onPatch(unit, { box_id: e.target.value || null })}
@@ -674,7 +740,7 @@ function UnitPanel({
           )}
           {line.units.length === 0 && (
             <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
-              Units get their own label, per-week person, and box — for gear like dry bags that's handed off between weeks.
+              Units get a label, per-week person, cabin, and box — dry bags handed off at the swap, or &ldquo;12 per cabin&rdquo; splits (set Qty).
             </span>
           )}
         </div>
@@ -785,13 +851,17 @@ function BoxesModal({
 
 /* ---- Add items: search the master inventory, Instacart-style --------------- */
 function AddItemsModal({
-  tripId, inventory, lines, initial, onAdded, onClose,
+  tripId, inventory, lines, initial, locations, defaultPacker, onAdded, onClose,
 }: {
   tripId: string;
   inventory: InventoryItem[];
   lines: PackLine[];
   /** Header-launched adds arrive pre-scoped to a category/subcategory. */
   initial: { type: InventoryType; category: string | null; subcategory: string | null } | null;
+  locations: StorageLocation[];
+  /** Resolves a stored item's responsible contact to a roster row — the
+   *  materialized "Packed by" default for new lines. */
+  defaultPacker: (item: InventoryItem) => string | null;
   onAdded: (line: PackLine, item: InventoryItem) => void;
   onClose: () => void;
 }) {
@@ -830,7 +900,12 @@ function AddItemsModal({
 
   async function add(item: InventoryItem) {
     try {
-      const line = await api.post<PackLine>(`/trips/${tripId}/pack`, { inventory_item_id: item.id });
+      const line = await api.post<PackLine>(`/trips/${tripId}/pack`, {
+        inventory_item_id: item.id,
+        // Stored items default to being packed by the location's responsible
+        // person (materialized — editable per line afterwards).
+        assignee_participant_id: defaultPacker(item),
+      });
       onAdded(line, item);
     } catch (e) {
       setError(errMsg(e, "Couldn't add the item"));
@@ -839,8 +914,12 @@ function AddItemsModal({
 
   async function createAndAdd(draft: ItemDraft) {
     try {
+      const loc = locations.find((l) => l.id === draft.storageLocationId);
       const line = await api.post<PackLine>(`/trips/${tripId}/pack`, {
         new_item: itemBodyFromDraft(draft),
+        assignee_participant_id: loc
+          ? defaultPacker({ storage_location: loc } as InventoryItem)
+          : null,
       });
       onAdded(line, line.item);
       setCreating(null);
@@ -863,7 +942,7 @@ function AddItemsModal({
       )}
     >
       {creating ? (
-        <NewItemForm draft={creating} setDraft={setCreating} error={error}
+        <NewItemForm draft={creating} setDraft={setCreating} error={error} locations={locations}
           onCancel={() => setCreating(null)} onSubmit={() => void createAndAdd(creating)} />
       ) : (
         <div className="flex flex-col gap-3">
@@ -938,17 +1017,18 @@ function AddItemsModal({
 }
 
 function NewItemForm({
-  draft, setDraft, error, onCancel, onSubmit,
+  draft, setDraft, error, locations, onCancel, onSubmit,
 }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   error: string | null;
+  locations: StorageLocation[];
   onCancel: () => void;
   onSubmit: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <ItemFields draft={draft} setDraft={setDraft} autoFocusName />
+      <ItemFields draft={draft} setDraft={setDraft} autoFocusName locations={locations} />
       {error && (
         <div className="rounded-[10px] px-3 py-2 text-[13px]"
           style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
@@ -963,12 +1043,14 @@ function NewItemForm({
 
 /* ---- Edit one line (+ its master inventory item) --------------------------- */
 function EditLineModal({
-  line, segments, participants, boxes, onSave, onClose,
+  line, segments, participants, boxes, cabins, locations, onSave, onClose,
 }: {
   line: PackLine;
   segments: Segment[];
   participants: Participant[];
   boxes: Box[];
+  cabins: { id: string; name: string }[];
+  locations: StorageLocation[];
   onSave: (lineBody: Record<string, unknown>, itemBody: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
 }) {
@@ -977,6 +1059,11 @@ function EditLineModal({
   const [unit, setUnit] = useState(line.unit ?? "");
   const [resp, setResp] = useState<Responsibility | "">(line.responsibility ?? "");
   const [assignee, setAssignee] = useState(line.assignee_participant_id ?? "");
+  // One "Belongs to" select encodes both owner FKs: "" = the group's.
+  const [owner, setOwner] = useState(
+    line.owner_participant_id ? `p:${line.owner_participant_id}`
+      : line.owner_cabin_id ? `c:${line.owner_cabin_id}` : "",
+  );
   const [segmentId, setSegmentId] = useState(line.segment_id ?? "");
   const [boxId, setBoxId] = useState(line.box_id ?? "");
   const [notes, setNotes] = useState(line.notes ?? "");
@@ -991,6 +1078,7 @@ function EditLineModal({
   const [defQty, setDefQty] = useState(line.item.default_qty == null ? "" : String(line.item.default_qty));
   const [basis, setBasis] = useState<QtyBasis>(line.item.qty_basis);
   const [period, setPeriod] = useState<QtyPeriod>(line.item.qty_period);
+  const [storedAt, setStoredAt] = useState(line.item.storage_location_id ?? "");
   const [itemNotes, setItemNotes] = useState(line.item.notes ?? "");
   const [busy, setBusy] = useState(false);
 
@@ -1001,6 +1089,12 @@ function EditLineModal({
     if ((unit.trim() || null) !== line.unit) lineBody.unit = unit.trim() || null;
     if ((resp || null) !== line.responsibility) lineBody.responsibility = resp || null;
     if ((assignee || null) !== line.assignee_participant_id) lineBody.assignee_participant_id = assignee || null;
+    const ownerP = owner.startsWith("p:") ? owner.slice(2) : null;
+    const ownerC = owner.startsWith("c:") ? owner.slice(2) : null;
+    if (ownerP !== line.owner_participant_id || ownerC !== line.owner_cabin_id) {
+      lineBody.owner_participant_id = ownerP;
+      lineBody.owner_cabin_id = ownerC;
+    }
     if ((segmentId || null) !== line.segment_id) lineBody.segment_id = segmentId || null;
     if ((boxId || null) !== line.box_id) lineBody.box_id = boxId || null;
     if ((notes || null) !== line.notes) lineBody.notes = notes || null;
@@ -1017,6 +1111,7 @@ function EditLineModal({
     if (nDefQty !== line.item.default_qty) itemBody.default_qty = nDefQty;
     if (basis !== line.item.qty_basis) itemBody.qty_basis = basis;
     if (period !== line.item.qty_period) itemBody.qty_period = period;
+    if ((storedAt || null) !== line.item.storage_location_id) itemBody.storage_location_id = storedAt || null;
     if ((itemNotes.trim() || null) !== line.item.notes) itemBody.notes = itemNotes.trim() || null;
     return { lineBody, itemBody };
   }
@@ -1068,8 +1163,17 @@ function EditLineModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SelectField label="Who brings it" value={defResp} onChange={(v) => setDefResp(v as Responsibility)}
             options={[["shared", "Shared"], ["personal", "Personal"], ["personal_stored", "Stored @ HQ"]]} />
-          <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
+          {locations.length > 0 ? (
+            <SelectField label="Stored at (between trips)" value={storedAt} onChange={setStoredAt}
+              options={[["", "Nowhere in particular"],
+                ...locations.map((l): [string, string] => [l.id, l.name])]} />
+          ) : (
+            <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
+          )}
         </div>
+        {locations.length > 0 && (
+          <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
+        )}
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
           <input type="checkbox" checked={isSpare} onChange={(e) => setIsSpare(e.target.checked)} />
           Spare — a backup item, not part of the working set
@@ -1093,8 +1197,16 @@ function EditLineModal({
             ]} />
         </div>
         {(resp || line.item.default_responsibility) === "shared" && (
-          <SelectField label="Assigned to" value={assignee} onChange={setAssignee}
-            options={[["", "Unassigned"], ...participants.map((p) => [p.id, p.name] as [string, string])]} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SelectField label="Packed by" value={assignee} onChange={setAssignee}
+              options={[["", "Unassigned"], ...participants.map((p) => [p.id, p.name] as [string, string])]} />
+            <SelectField label="Belongs to (on the trip)" value={owner} onChange={setOwner}
+              options={[
+                ["", "The group"],
+                ...cabins.map((c): [string, string] => [`c:${c.id}`, `${c.name} (cabin)`]),
+                ...participants.map((p): [string, string] => [`p:${p.id}`, p.name]),
+              ]} />
+          </div>
         )}
         {line.units.length === 0 && boxes.length > 0 && (
           <SelectField label="Box" value={boxId} onChange={setBoxId}

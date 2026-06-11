@@ -1,4 +1,4 @@
-import type { InventoryItem, PackLine, PackPerson, Segment, Stay } from "./api";
+import type { InventoryItem, PackLine, PackPerson, PackUnit, Segment, Stay } from "./api";
 
 /** The trip facts a quantity hint scales by. Derived client-side from data the
  *  packing pages already fetch — nothing is stored. A "boat" is just 2 people. */
@@ -94,6 +94,13 @@ export function hintLabel(item: InventoryItem): string | null {
 
 export function fmtQty(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, "");
+}
+
+/** An itemized line's effective quantity: the sum of unit quantities, where a
+ *  unit with no quantity is one physical thing (dry bag) and a unit with one is
+ *  a split portion (12 of the 24 batteries). */
+export function unitsTotal(units: PackUnit[]): number {
+  return units.reduce((sum, u) => sum + (u.quantity ?? 1), 0);
 }
 
 /** Where one participant's copy of a personal line comes from: their override

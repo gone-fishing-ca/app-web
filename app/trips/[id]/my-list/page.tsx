@@ -43,7 +43,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
   const participantId = selected || me?.id || participants[0]?.id || "";
   const participant = participants.find((p) => p.id === participantId) ?? null;
 
-  const { bring, stored, shared, assignedUnits } = useMemo(() => {
+  const { bring, stored, shared, assignedUnits, owned } = useMemo(() => {
     // Itemized lines speak through their unit assignments instead of the
     // generic everyone-gets-one rows.
     const personal = (lines ?? []).filter(
@@ -63,6 +63,11 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
         (l) => l.effective_responsibility === "shared" && l.assignee_participant_id === participantId,
       ),
       assignedUnits: assigned,
+      // Belongs to this person on the trip, but someone else packs it (lines
+      // they pack themselves already show under the shared section).
+      owned: (lines ?? []).filter(
+        (l) => l.owner_participant_id === participantId && l.assignee_participant_id !== participantId,
+      ),
     };
   }, [lines, participantId]);
 
@@ -191,7 +196,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
 
       {lines === null ? (
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
-      ) : bring.length + stored.length + shared.length + assignedUnits.length === 0 ? (
+      ) : bring.length + stored.length + shared.length + assignedUnits.length + owned.length === 0 ? (
         <EmptyState icon={Backpack} title="Nothing assigned yet"
           subtitle="Personal items and shared items assigned to this person will show up here as the Packing list comes together." />
       ) : (
@@ -235,8 +240,46 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
               ))}
             </Card>
           )}
-          <Section icon={Backpack} title="Group gear you're on the hook for"
-            subtitle="Shared items assigned to you on the Packing page." list={shared} />
+          <Section icon={Backpack} title="You pack for the group"
+            subtitle="Shared items with you as the packer on the Packing page." list={shared} />
+          {owned.length > 0 && (
+            <Card>
+              <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5">
+                <Tag size={18} strokeWidth={1.9} style={{ color: "var(--accent-600)" }} />
+                <div className="flex-1 min-w-0">
+                  <div style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: "var(--display-weight)" as unknown as number,
+                    letterSpacing: "var(--display-tracking)",
+                    fontSize: 16.5, color: "var(--text)",
+                  }}>
+                    Yours on the trip
+                  </div>
+                  <div className="text-[12px]" style={{ color: "var(--text-3)" }}>
+                    These belong to you once you&apos;re up there — someone else packs them.
+                  </div>
+                </div>
+                <Badge tone="neutral">{owned.length}</Badge>
+              </div>
+              {owned.map((line) => {
+                const packer = participants.find((p) => p.id === line.assignee_participant_id);
+                return (
+                  <div key={line.id} className="flex items-center gap-3 px-4 sm:px-5 py-2.5"
+                    style={{ borderTop: "1px solid var(--border)" }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>
+                        {line.item.name}
+                      </div>
+                      <div className="truncate text-[12px]" style={{ color: "var(--text-3)" }}>
+                        {packer ? `Packed by ${packer.name}` : "No packer assigned yet"}
+                      </div>
+                    </div>
+                    <Badge tone="neutral">{line.item.item_type}</Badge>
+                  </div>
+                );
+              })}
+            </Card>
+          )}
         </div>
       )}
     </div>

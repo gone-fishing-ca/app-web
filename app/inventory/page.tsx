@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ArrowLeft, Boxes, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Boxes, MapPin, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { GroupHeader, TypeHeader, useFoldState } from "@/components/collapsible";
 import {
   type ItemDraft,
@@ -14,7 +14,14 @@ import {
 } from "@/components/inventory-form";
 import { Badge, Btn, Card, EmptyState, Eyebrow, Field, ModalShell, Wordmark } from "@/components/ui";
 import { UserMenu } from "@/components/user-menu";
-import { api, INVENTORY_TYPES, type InventoryItem, type InventoryType } from "@/lib/api";
+import {
+  api,
+  INVENTORY_TYPES,
+  type Contact,
+  type InventoryItem,
+  type InventoryType,
+  type StorageLocation,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { hintLabel } from "@/lib/packing";
 
@@ -38,6 +45,9 @@ export default function InventoryPage() {
   const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<{ item: InventoryItem | null; draft: ItemDraft } | null>(null);
+  const [locations, setLocations] = useState<StorageLocation[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [locOpen, setLocOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,6 +56,8 @@ export default function InventoryPage() {
     api.get<InventoryItem[]>("/inventory?include_archived=true")
       .then(setItems)
       .catch((e) => setError(errMsg(e, "Failed to load inventory")));
+    api.get<StorageLocation[]>("/storage-locations").then(setLocations).catch(() => {});
+    api.get<Contact[]>("/contacts").then(setContacts).catch(() => {});
   }, [authLoading, user, router]);
 
   const q = query.trim().toLowerCase();
@@ -160,9 +172,14 @@ export default function InventoryPage() {
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
           <Eyebrow>Master inventory</Eyebrow>
-          <Btn kind="accent" icon={Plus} onClick={() => setEditing({ item: null, draft: emptyItemDraft("", typeFilter === "All" ? "Gear" : typeFilter) })}>
-            New item
-          </Btn>
+          <div className="flex flex-wrap gap-2">
+            <Btn kind="ghost" icon={MapPin} onClick={() => setLocOpen(true)}>
+              Storage locations{locations.length > 0 ? ` (${locations.length})` : ""}
+            </Btn>
+            <Btn kind="accent" icon={Plus} onClick={() => setEditing({ item: null, draft: emptyItemDraft("", typeFilter === "All" ? "Gear" : typeFilter) })}>
+              New item
+            </Btn>
+          </div>
         </div>
         <div className="mb-6 text-[13.5px]" style={{ color: "var(--text-3)" }}>
           Everything you&apos;ve ever brought, reusable across years — trips pull their packing lists from here.
@@ -251,7 +268,9 @@ export default function InventoryPage() {
                             {item.archived && <Badge tone="warning">archived</Badge>}
                           </div>
                           <div className="truncate text-[12px] mt-0.5" style={{ color: "var(--text-3)" }}>
-                            {[hintLabel(item), item.notes].filter(Boolean).join(" · ") || "—"}
+                            {[hintLabel(item),
+                              item.storage_location ? `at ${item.storage_location.name}` : null,
+                              item.notes].filter(Boolean).join(" · ") || "—"}
                           </div>
                         </div>
                         <Badge tone={item.default_responsibility === "shared" ? "neutral" : "info"}>
@@ -307,9 +326,131 @@ export default function InventoryPage() {
           }
         >
           <ItemFields draft={editing.draft} setDraft={(d) => setEditing({ ...editing, draft: d })}
-            autoFocusName={!editing.item} categoryHints={categoryHints} />
+            autoFocusName={!editing.item} categoryHints={categoryHints} locations={locations} />
         </ModalShell>
       )}
+
+      {locOpen && (
+        <LocationsModal
+          locations={locations}
+          setLocations={setLocations}
+          contacts={contacts}
+          onChanged={() => {
+            // Items embed their location — refresh so renames show up.
+            api.get<InventoryItem[]>("/inventory?include_archived=true").then(setItems).catch(() => {});
+          }}
+          onClose={() => setLocOpen(false)}
+        />
+      )}
     </div>
+  );
+}
+
+/* ---- Storage locations: where things live between trips --------------------- */
+function LocationsModal({
+  locations, setLocations, contacts, onChanged, onClose,
+}: {
+  locations: StorageLocation[];
+  setLocations: (fn: (prev: StorageLocation[]) => StorageLocation[]) => void;
+  contacts: Contact[];
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState("");
+
+  async function addLocation() {
+    const n = name.trim();
+    if (!n) return;
+    try {
+      const created = await api.post<StorageLocation>("/storage-locations", { name: n });
+      setLocations((prev) => [...prev, created]);
+      setName("");
+    } catch (e) {
+      setError(errMsg(e, "Couldn't add the location"));
+    }
+  }
+
+  async function patchLocation(loc: StorageLocation, body: Record<string, unknown>) {
+    try {
+      const updated = await api.patch<StorageLocation>(`/storage-locations/${loc.id}`, body);
+      setLocations((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+      onChanged();
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+  }
+
+  async function deleteLocation(loc: StorageLocation) {
+    if (!confirm(`Delete “${loc.name}”? This only works while no items are stored there.`)) return;
+    try {
+      await api.del(`/storage-locations/${loc.id}`);
+      setLocations((prev) => prev.filter((l) => l.id !== loc.id));
+    } catch (e) {
+      setError(errMsg(e, "Delete failed — items are stored there"));
+    }
+  }
+
+  return (
+    <ModalShell
+      title="Storage locations"
+      subtitle="Where inventory lives between trips. The responsible person becomes the default “packed by” when a stored item goes on a trip's list."
+      maxWidth={560}
+      onClose={onClose}
+    >
+      {error && (
+        <div className="mb-3 rounded-[10px] px-3 py-2 text-[13px]"
+          style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
+      )}
+      <div className="flex flex-col gap-2">
+        {locations.map((loc) => (
+          <div key={loc.id} className="flex items-center gap-2">
+            <input
+              defaultValue={loc.name}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v && v !== loc.name) void patchLocation(loc, { name: v });
+              }}
+              className="flex-1 min-w-0 rounded-[9px] px-2.5 py-2 text-[13.5px] font-semibold outline-none"
+              style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+            />
+            <select
+              value={loc.responsible_contact_id ?? ""}
+              onChange={(e) => void patchLocation(loc, { responsible_contact_id: e.target.value || null })}
+              title="Responsible person — the default packer for items stored here"
+              className="rounded-[9px] px-2 py-2 text-[13px] w-[180px]"
+              style={{
+                background: "var(--surface)", border: "1px solid var(--border)",
+                color: loc.responsible_contact_id ? "var(--text)" : "var(--text-3)",
+              }}
+            >
+              <option value="">No one responsible</option>
+              {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <button onClick={() => void deleteLocation(loc)} title="Delete location"
+              className="grid place-items-center flex-none"
+              style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))}
+        {locations.length === 0 && (
+          <div className="py-4 text-center text-[13.5px]" style={{ color: "var(--text-3)" }}>
+            No locations yet — “Greg's House”, “The storage unit”…
+          </div>
+        )}
+        <div className="flex items-center gap-2 mt-1">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void addLocation(); }}
+            placeholder="New location — Greg's House…"
+            className="flex-1 min-w-0 rounded-[9px] px-2.5 py-2 text-[13.5px] outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+          />
+          <Btn kind="subtle" icon={Plus} onClick={() => void addLocation()}>Add</Btn>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
