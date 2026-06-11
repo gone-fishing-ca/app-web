@@ -4,6 +4,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { CalendarRange, PlaneTakeoff, Plus } from "lucide-react";
 import { Btn, Card, EmptyState, SectionTitle } from "@/components/ui";
 import { FlightLegEditor } from "@/components/flight-leg-editor";
+import { FlightAwareLink, StatusChip } from "@/components/flight-status";
 import { api, type FlightLeg, type ItineraryItem, type Participant, type Segment } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 
@@ -133,38 +134,45 @@ export default function FlightsPage({ params }: { params: Promise<{ id: string }
                   const item = l.itinerary_item_id ? itemById.get(l.itinerary_item_id) : undefined;
                   const date = l.leg_date ?? item?.item_date ?? null;
                   return (
-                    <button
+                    <div
                       key={l.id}
-                      type="button"
-                      onClick={() => setLegEditor({ leg: l })}
-                      className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 px-4 sm:px-5 py-2.5 text-left text-[13.5px] sm:flex-nowrap"
-                      style={{ color: "var(--text)", borderTop: i ? "1px solid var(--border)" : "none" }}
+                      className="flex w-full items-center gap-2 px-4 sm:px-5"
+                      style={{ borderTop: i ? "1px solid var(--border)" : "none" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <span className="w-full sm:w-[110px] flex-none font-semibold text-[13px]">
-                        {date ? fmtDate(date, { weekday: "short", month: "short", day: "numeric" }) : "No date"}
-                      </span>
-                      <span className="gf-mono sm:w-[72px] flex-none text-[12.5px]" style={{ color: "var(--text-2)" }}>
-                        {l.flight_number ?? "—"}
-                      </span>
-                      <span className="flex-none text-[13px]" style={{ color: "var(--text-2)" }}>
-                        {l.origin_airport ?? "?"} → {l.destination_airport ?? "?"}
-                      </span>
-                      <span className="flex-none text-[12.5px]" style={{ color: "var(--text-3)" }}>
-                        {l.departure_time ?? ""}
-                        {l.arrival_time ? ` – ${l.arrival_time}` : ""}
-                      </span>
-                      <span className="flex-1 min-w-0 truncate text-right text-[12px]" style={{ color: "var(--text-3)" }}>
-                        {item && (
-                          <span className="inline-flex items-center gap-1">
-                            <CalendarRange size={12} /> {item.title}
-                          </span>
-                        )}
-                        {item && l.confirmation_code && <span className="px-1">·</span>}
-                        {l.confirmation_code && <span className="gf-mono">{l.confirmation_code}</span>}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setLegEditor({ leg: l })}
+                        className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 py-2.5 text-left text-[13.5px] sm:flex-nowrap"
+                        style={{ color: "var(--text)" }}
+                      >
+                        <span className="w-full sm:w-[110px] flex-none font-semibold text-[13px]">
+                          {date ? fmtDate(date, { weekday: "short", month: "short", day: "numeric" }) : "No date"}
+                        </span>
+                        <span className="gf-mono sm:w-[72px] flex-none text-[12.5px]" style={{ color: "var(--text-2)" }}>
+                          {l.flight_number ?? "—"}
+                        </span>
+                        <span className="flex-none text-[13px]" style={{ color: "var(--text-2)" }}>
+                          {l.origin_airport ?? "?"} → {l.destination_airport ?? "?"}
+                        </span>
+                        <span className="flex-none text-[12.5px]" style={{ color: "var(--text-3)" }}>
+                          {l.departure_time ?? ""}
+                          {l.arrival_time ? ` – ${l.arrival_time}` : ""}
+                        </span>
+                        <span className="flex-1 min-w-0 truncate text-right text-[12px]" style={{ color: "var(--text-3)" }}>
+                          {item && (
+                            <span className="inline-flex items-center gap-1">
+                              <CalendarRange size={12} /> {item.title}
+                            </span>
+                          )}
+                          {item && l.confirmation_code && <span className="px-1">·</span>}
+                          {l.confirmation_code && <span className="gf-mono">{l.confirmation_code}</span>}
+                        </span>
+                      </button>
+                      {l.status && <StatusChip status={l.status} />}
+                      <FlightAwareLink flightNumber={l.flight_number} />
+                    </div>
                   );
                 })}
               </Card>

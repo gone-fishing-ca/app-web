@@ -247,6 +247,8 @@ export type FlightLeg = {
   arrival_time: string | null;
   confirmation_code: string | null;
   car_notes: string | null;
+  status: string | null; // cached AeroDataBox status (Expected, Delayed, Arrived, …)
+  status_checked_at: string | null; // drives the API's lazy refresh; read-only here
 };
 
 /** One scheduled flight from GET /trips/{id}/flights/lookup (AeroDataBox) —

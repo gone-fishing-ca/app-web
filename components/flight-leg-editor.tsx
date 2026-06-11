@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Btn, ComboBox, Field, ModalShell } from "@/components/ui";
+import { FlightAwareLink, StatusChip } from "@/components/flight-status";
 import { api, type FlightLeg, type FlightLookupLeg, type ItineraryItem, type Participant } from "@/lib/api";
 
 /** The airlines the crew actually flies — picking one + a number + a date is
@@ -73,6 +74,7 @@ export function FlightLegEditor({
   const [arrives, setArrives] = useState(leg?.arrival_time ?? "");
   const [confirmation, setConfirmation] = useState(leg?.confirmation_code ?? "");
   const [carNotes, setCarNotes] = useState(leg?.car_notes ?? "");
+  const [flightStatus, setFlightStatus] = useState(leg?.status ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,8 +137,9 @@ export function FlightLegEditor({
     if (r.destination_airport) setDestination(r.destination_airport);
     if (r.departure_time) setDeparts(r.departure_time);
     if (r.arrival_time) setArrives(r.arrival_time);
+    if (r.status) setFlightStatus(r.status);
     setLookupResults(null);
-    setLookupNote(`Filled from the schedule${r.airline ? ` — ${r.airline}` : ""}${r.status ? ` (${r.status})` : ""}.`);
+    setLookupNote(`Filled from the schedule${r.airline ? ` — ${r.airline}` : ""}.`);
   }
 
   async function save() {
@@ -179,6 +182,7 @@ export function FlightLegEditor({
       arrival_time: arrives || null,
       confirmation_code: confirmation || null,
       car_notes: carNotes || null,
+      status: flightStatus || null,
     };
     try {
       const saved = leg
@@ -265,9 +269,11 @@ export function FlightLegEditor({
             <Btn kind="subtle" size="sm" icon={Search} onClick={lookup} disabled={!canLookup}>
               {lookupBusy ? "Looking up…" : "Look up schedule"}
             </Btn>
-            <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
-              {canLookup || lookupBusy ? "Fills the airports and times below." : "Needs an airline, flight # and date."}
+            <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "var(--text-3)" }}>
+              {canLookup || lookupBusy ? "Fills the airports, times and status." : "Needs an airline, flight # and date."}
             </span>
+            {flightStatus && <StatusChip status={flightStatus} />}
+            <FlightAwareLink flightNumber={fullFlightNumber} />
           </div>
 
           {lookupNote && (
