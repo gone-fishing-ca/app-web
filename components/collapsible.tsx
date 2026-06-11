@@ -109,11 +109,11 @@ export function GroupHeader({ level, label, count, open, onToggle, onAdd, onSetA
   onAdd?: () => void;
   onSetAll?: (open: boolean) => void;
 }) {
-  // Tinted bands set the headers apart from the rows: categories in the soft
-  // slate, subcategories in the soft teal — both tokens flip with dark mode.
+  // Tinted bands set the headers apart from the rows: categories in the
+  // brighter teal, subcategories in the soft slate — both flip with dark mode.
   const band = level === 1
-    ? { background: "var(--primary-100)", color: "var(--primary)" }
-    : { background: "var(--accent-100)", color: "var(--accent-600)" };
+    ? { background: "var(--accent-100)", color: "var(--accent-600)" }
+    : { background: "var(--primary-100)", color: "var(--primary)" };
   return (
     <div
       className={`flex items-center gap-2 ${level === 1 ? "pl-4 sm:pl-5 py-1.5" : "pl-8 sm:pl-10 py-1"} pr-4 sm:pr-5`}
