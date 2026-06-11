@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@/components/ui";
+import { Avatar, Card, initialsOf } from "@/components/ui";
 import { KIND_META } from "@/components/itinerary-kit";
 import { parseISO } from "@/lib/calendar";
 import type { ItineraryItem, Participant } from "@/lib/api";
@@ -50,7 +50,7 @@ export function ItineraryList({
                 <ItemRow
                   key={it.id}
                   item={it}
-                  who={whoLabel(it.participant_ids, participants)}
+                  people={involved(it.participant_ids, participants)}
                   onClick={() => onPickItem(it)}
                 />
               ))}
@@ -62,10 +62,9 @@ export function ItineraryList({
   );
 }
 
-function ItemRow({ item, who, onClick }: { item: ItineraryItem; who: string; onClick: () => void }) {
+function ItemRow({ item, people, onClick }: { item: ItineraryItem; people: Participant[]; onClick: () => void }) {
   const m = KIND_META[item.kind];
-  const route = [item.location, item.end_location].filter(Boolean).join(" → ");
-  const sub = [route, who].filter(Boolean).join(" · ");
+  const sub = [item.location, item.end_location].filter(Boolean).join(" → ");
   const time = item.start_time ? item.start_time + (item.end_time ? ` – ${item.end_time}` : "") : "";
   return (
     <button
@@ -96,17 +95,27 @@ function ItemRow({ item, who, onClick }: { item: ItineraryItem; who: string; onC
           {time}
         </span>
       )}
+      {people.length > 0 && (
+        <span className="flex flex-none items-center">
+          {people.map((p, i) => (
+            <span
+              key={p.id}
+              title={p.name}
+              className="rounded-full"
+              style={{ marginLeft: i ? -7 : 0, boxShadow: "0 0 0 2px var(--surface)" }}
+            >
+              <Avatar initials={initialsOf(p.name, p.email)} src={p.avatar_url} size={24} />
+            </span>
+          ))}
+        </span>
+      )}
     </button>
   );
 }
 
-/** "Who's going" summary: names while it stays short, a count once it doesn't. */
-function whoLabel(ids: string[], participants: Participant[]): string {
-  if (ids.length === 0) return "";
-  if (participants.length > 0 && ids.length === participants.length) return "Everyone";
-  const names = ids
-    .map((id) => participants.find((p) => p.id === id)?.name)
-    .filter((n): n is string => Boolean(n));
-  if (names.length <= 2) return names.join(" & ");
-  return `${names.length} going`;
+/** Roster rows for the item's participant_ids, in roster order so the same
+ *  crew always stacks the same way across rows. */
+function involved(ids: string[], participants: Participant[]): Participant[] {
+  const going = new Set(ids);
+  return participants.filter((p) => going.has(p.id));
 }
