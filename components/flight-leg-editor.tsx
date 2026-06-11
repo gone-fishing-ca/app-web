@@ -265,7 +265,7 @@ export function FlightLegEditor({
             <Field label="Date" type="date" value={legDate} onChange={(e) => setLegDate(e.target.value)} />
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <Btn kind="subtle" size="sm" icon={Search} onClick={lookup} disabled={!canLookup}>
               {lookupBusy ? "Looking up…" : "Look up schedule"}
             </Btn>

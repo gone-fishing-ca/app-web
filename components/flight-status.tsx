@@ -43,9 +43,10 @@ export function StatusChip({ status }: { status: string }) {
   );
 }
 
-/** Small FlightAware-logo pill linking to the live flight page (new tab).
- *  White pill on purpose — the brand logo is navy and unreadable on dark. */
-export function FlightAwareLink({ flightNumber, height = 13 }: { flightNumber: string | null | undefined; height?: number }) {
+/** FlightAware plane-and-trail icon linking to the live flight page (new tab).
+ *  The icon ships its own light-blue gradient background, so it works as-is in
+ *  both modes. */
+export function FlightAwareLink({ flightNumber, height = 18 }: { flightNumber: string | null | undefined; height?: number }) {
   const url = flightAwareUrl(flightNumber);
   if (!url) return null;
   return (
@@ -55,11 +56,14 @@ export function FlightAwareLink({ flightNumber, height = 13 }: { flightNumber: s
       rel="noopener noreferrer"
       title="Track on FlightAware"
       onClick={(e) => e.stopPropagation()}
-      className="inline-flex items-center rounded-full flex-none"
-      style={{ background: "#fff", border: "1px solid var(--border)", padding: "3px 8px" }}
+      className="inline-flex flex-none"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/flightaware.png" alt="FlightAware" style={{ height, width: "auto", display: "block" }} />
+      <img
+        src="/flightaware-icon.png"
+        alt="FlightAware"
+        style={{ height, width: "auto", display: "block", borderRadius: 5, border: "1px solid var(--border)" }}
+      />
     </a>
   );
 }
