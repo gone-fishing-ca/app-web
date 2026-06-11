@@ -273,13 +273,17 @@ export type QtyPeriod = "per_trip" | "per_day";
 export type PackLineStatus = "planned" | "purchased" | "packed";
 export type PackSource = "self" | "stored";
 
-/** Where inventory lives between trips ("Greg's House"). Owner-scoped catalog;
- *  the responsible contact is the default "packed by" when a stored item is
- *  added to a trip's list (resolved to a roster row client-side at add time). */
-export type StorageLocation = {
+/** Where an inventory item comes from: storage ("Greg's House"), a buyer
+ *  ("Dave" — bought fresh each year), or the outfitter ("Mattice Lake" — flown
+ *  in). Owner-scoped catalog; the responsible contact is the default "packed
+ *  by" when one of its items is added to a trip's list (resolved to a roster
+ *  row client-side at add time). */
+export type SourceKind = "storage" | "buyer" | "outfitter";
+export type Source = {
   id: string;
   owner_id: string;
   name: string;
+  kind: SourceKind;
   responsible_contact_id: string | null;
   notes: string | null;
   archived: boolean;
@@ -303,8 +307,8 @@ export type InventoryItem = {
   is_spare: boolean; // a backup item, not part of the working set — badged, sorted last
   collect_prefs: boolean; // quantity comes from member prefs, not the hint
   is_personal: boolean; // everyone brings their own (if they want); off = shared/managed
-  storage_location_id: string | null;
-  storage_location: StorageLocation | null; // embedded for display + packer defaulting
+  source_id: string | null;
+  source: Source | null; // embedded for display + packer defaulting
   notes: string | null;
   archived: boolean;
 };
@@ -379,6 +383,10 @@ export type PackLine = {
   assignee_participant_id: string | null;
   owner_participant_id: string | null;
   owner_cabin_id: string | null;
+  // This trip's spend on the line + who fronted it (balance-sheet raw input;
+  // split derived: prefs lines by pref_qty, else even across the group).
+  cost: number | null;
+  paid_by_participant_id: string | null;
   segment_id: string | null;
   status: PackLineStatus;
   notes: string | null;

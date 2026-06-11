@@ -20,10 +20,11 @@ import {
   type Contact,
   type InventoryItem,
   type InventoryType,
-  type StorageLocation,
+  type Source,
+  type SourceKind,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { hintLabel } from "@/lib/packing";
+import { hintLabel, sourceLabel } from "@/lib/packing";
 
 function errMsg(e: unknown, fallback: string): string {
   return e && typeof e === "object" && "message" in e
@@ -39,9 +40,9 @@ export default function InventoryPage() {
   const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<{ item: InventoryItem | null; draft: ItemDraft } | null>(null);
-  const [locations, setLocations] = useState<StorageLocation[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [locOpen, setLocOpen] = useState(false);
+  const [srcOpen, setSrcOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function InventoryPage() {
     api.get<InventoryItem[]>("/inventory?include_archived=true")
       .then(setItems)
       .catch((e) => setError(errMsg(e, "Failed to load inventory")));
-    api.get<StorageLocation[]>("/storage-locations").then(setLocations).catch(() => {});
+    api.get<Source[]>("/sources").then(setSources).catch(() => {});
     api.get<Contact[]>("/contacts").then(setContacts).catch(() => {});
   }, [authLoading, user, router]);
 
@@ -167,8 +168,8 @@ export default function InventoryPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
           <Eyebrow>Master inventory</Eyebrow>
           <div className="flex flex-wrap gap-2">
-            <Btn kind="ghost" icon={MapPin} onClick={() => setLocOpen(true)}>
-              Storage locations{locations.length > 0 ? ` (${locations.length})` : ""}
+            <Btn kind="ghost" icon={MapPin} onClick={() => setSrcOpen(true)}>
+              Sources{sources.length > 0 ? ` (${sources.length})` : ""}
             </Btn>
             <Btn kind="accent" icon={Plus} onClick={() => setEditing({ item: null, draft: emptyItemDraft("", typeFilter === "All" ? "Gear" : typeFilter) })}>
               New item
@@ -263,7 +264,7 @@ export default function InventoryPage() {
                           </div>
                           <div className="truncate text-[12px] mt-0.5" style={{ color: "var(--text-3)" }}>
                             {[hintLabel(item),
-                              item.storage_location ? `at ${item.storage_location.name}` : null,
+                              sourceLabel(item.source),
                               item.notes].filter(Boolean).join(" · ") || "—"}
                           </div>
                         </div>
@@ -319,77 +320,84 @@ export default function InventoryPage() {
           }
         >
           <ItemFields draft={editing.draft} setDraft={(d) => setEditing({ ...editing, draft: d })}
-            autoFocusName={!editing.item} categoryHints={categoryHints} locations={locations}
-            onManageLocations={() => setLocOpen(true)} />
+            autoFocusName={!editing.item} categoryHints={categoryHints} sources={sources}
+            onManageSources={() => setSrcOpen(true)} />
         </ModalShell>
       )}
 
-      {locOpen && (
-        <LocationsModal
-          locations={locations}
-          setLocations={setLocations}
+      {srcOpen && (
+        <SourcesModal
+          sources={sources}
+          setSources={setSources}
           contacts={contacts}
           onChanged={() => {
-            // Items embed their location — refresh so renames show up.
+            // Items embed their source — refresh so renames show up.
             api.get<InventoryItem[]>("/inventory?include_archived=true").then(setItems).catch(() => {});
           }}
-          onClose={() => setLocOpen(false)}
+          onClose={() => setSrcOpen(false)}
         />
       )}
     </div>
   );
 }
 
-/* ---- Storage locations: where things live between trips --------------------- */
-function LocationsModal({
-  locations, setLocations, contacts, onChanged, onClose,
+/* ---- Sources: where things come from (storage / buyer / outfitter) ---------- */
+const KIND_LABEL: Record<SourceKind, string> = {
+  storage: "Storage",
+  buyer: "Buyer",
+  outfitter: "Outfitter",
+};
+
+function SourcesModal({
+  sources, setSources, contacts, onChanged, onClose,
 }: {
-  locations: StorageLocation[];
-  setLocations: (fn: (prev: StorageLocation[]) => StorageLocation[]) => void;
+  sources: Source[];
+  setSources: (fn: (prev: Source[]) => Source[]) => void;
   contacts: Contact[];
   onChanged: () => void;
   onClose: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<SourceKind>("storage");
 
-  async function addLocation() {
+  async function addSource() {
     const n = name.trim();
     if (!n) return;
     try {
-      const created = await api.post<StorageLocation>("/storage-locations", { name: n });
-      setLocations((prev) => [...prev, created]);
+      const created = await api.post<Source>("/sources", { name: n, kind });
+      setSources((prev) => [...prev, created]);
       setName("");
     } catch (e) {
-      setError(errMsg(e, "Couldn't add the location"));
+      setError(errMsg(e, "Couldn't add the source"));
     }
   }
 
-  async function patchLocation(loc: StorageLocation, body: Record<string, unknown>) {
+  async function patchSource(src: Source, body: Record<string, unknown>) {
     try {
-      const updated = await api.patch<StorageLocation>(`/storage-locations/${loc.id}`, body);
-      setLocations((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+      const updated = await api.patch<Source>(`/sources/${src.id}`, body);
+      setSources((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
       onChanged();
     } catch (e) {
       setError(errMsg(e, "Save failed"));
     }
   }
 
-  async function deleteLocation(loc: StorageLocation) {
-    if (!confirm(`Delete “${loc.name}”? This only works while no items are stored there.`)) return;
+  async function deleteSource(src: Source) {
+    if (!confirm(`Delete “${src.name}”? This only works while no items come from there.`)) return;
     try {
-      await api.del(`/storage-locations/${loc.id}`);
-      setLocations((prev) => prev.filter((l) => l.id !== loc.id));
+      await api.del(`/sources/${src.id}`);
+      setSources((prev) => prev.filter((s) => s.id !== src.id));
     } catch (e) {
-      setError(errMsg(e, "Delete failed — items are stored there"));
+      setError(errMsg(e, "Delete failed — items come from there"));
     }
   }
 
   return (
     <ModalShell
-      title="Storage locations"
-      subtitle="Where inventory lives between trips. The responsible person becomes the default “packed by” when a stored item goes on a trip's list."
-      maxWidth={560}
+      title="Sources"
+      subtitle="Where inventory comes from: storage between trips, a buyer who shops fresh, or the outfitter's fly-in order. The responsible person becomes the default “packed by”."
+      maxWidth={620}
       onClose={onClose}
     >
       {error && (
@@ -397,52 +405,70 @@ function LocationsModal({
           style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
       )}
       <div className="flex flex-col gap-2">
-        {locations.map((loc) => (
-          <div key={loc.id} className="flex items-center gap-2">
+        {sources.map((src) => (
+          <div key={src.id} className="flex items-center gap-2">
             <input
-              defaultValue={loc.name}
+              defaultValue={src.name}
               onBlur={(e) => {
                 const v = e.target.value.trim();
-                if (v && v !== loc.name) void patchLocation(loc, { name: v });
+                if (v && v !== src.name) void patchSource(src, { name: v });
               }}
               className="flex-1 min-w-0 rounded-[9px] px-2.5 py-2 text-[13.5px] font-semibold outline-none"
               style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
             />
             <select
-              value={loc.responsible_contact_id ?? ""}
-              onChange={(e) => void patchLocation(loc, { responsible_contact_id: e.target.value || null })}
-              title="Responsible person — the default packer for items stored here"
-              className="rounded-[9px] px-2 py-2 text-[13px] w-[180px]"
+              value={src.kind}
+              onChange={(e) => void patchSource(src, { kind: e.target.value })}
+              title="Storage = pulled from here; Buyer = bought fresh; Outfitter = flown in"
+              className="rounded-[9px] px-2 py-2 text-[13px] w-[110px]"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+            >
+              {(Object.keys(KIND_LABEL) as SourceKind[]).map((k) => (
+                <option key={k} value={k}>{KIND_LABEL[k]}</option>
+              ))}
+            </select>
+            <select
+              value={src.responsible_contact_id ?? ""}
+              onChange={(e) => void patchSource(src, { responsible_contact_id: e.target.value || null })}
+              title="Responsible person — the default packer for items from here"
+              className="rounded-[9px] px-2 py-2 text-[13px] w-[160px]"
               style={{
                 background: "var(--surface)", border: "1px solid var(--border)",
-                color: loc.responsible_contact_id ? "var(--text)" : "var(--text-3)",
+                color: src.responsible_contact_id ? "var(--text)" : "var(--text-3)",
               }}
             >
               <option value="">No one responsible</option>
               {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <button onClick={() => void deleteLocation(loc)} title="Delete location"
+            <button onClick={() => void deleteSource(src)} title="Delete source"
               className="grid place-items-center flex-none"
               style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
               <Trash2 size={13} />
             </button>
           </div>
         ))}
-        {locations.length === 0 && (
+        {sources.length === 0 && (
           <div className="py-4 text-center text-[13.5px]" style={{ color: "var(--text-3)" }}>
-            No locations yet — “Greg's House”, “The storage unit”…
+            No sources yet — “Greg's House” (storage), “Dave” (buyer), “Mattice Lake” (outfitter)…
           </div>
         )}
         <div className="flex items-center gap-2 mt-1">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void addLocation(); }}
-            placeholder="New location — Greg's House…"
+            onKeyDown={(e) => { if (e.key === "Enter") void addSource(); }}
+            placeholder="New source — Greg's House, Dave…"
             className="flex-1 min-w-0 rounded-[9px] px-2.5 py-2 text-[13.5px] outline-none"
             style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
           />
-          <Btn kind="subtle" icon={Plus} onClick={() => void addLocation()}>Add</Btn>
+          <select value={kind} onChange={(e) => setKind(e.target.value as SourceKind)}
+            className="rounded-[9px] px-2 py-2 text-[13px]"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
+            {(Object.keys(KIND_LABEL) as SourceKind[]).map((k) => (
+              <option key={k} value={k}>{KIND_LABEL[k]}</option>
+            ))}
+          </select>
+          <Btn kind="subtle" icon={Plus} onClick={() => void addSource()}>Add</Btn>
         </div>
       </div>
     </ModalShell>

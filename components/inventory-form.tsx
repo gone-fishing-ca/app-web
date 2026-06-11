@@ -1,13 +1,14 @@
 "use client";
 
 import { Field } from "@/components/ui";
+import { sourceLabel } from "@/lib/packing";
 import {
   INVENTORY_TYPES,
   type InventoryItem,
   type InventoryType,
   type QtyBasis,
   type QtyPeriod,
-  type StorageLocation,
+  type Source,
 } from "@/lib/api";
 
 /* Shared editor state + field grid for a master inventory item — used by the
@@ -25,7 +26,7 @@ export type ItemDraft = {
   isSpare: boolean; // a backup item, not part of the working set
   collectPrefs: boolean; // quantity from member prefs instead of the hint
   isPersonal: boolean; // everyone brings their own; off = shared/managed
-  storageLocationId: string; // "" = nowhere in particular
+  sourceId: string; // "" = someone just brings it from home
   notes: string;
 };
 
@@ -35,7 +36,7 @@ export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDra
   return {
     name: name.trim(), item_type: type, category: "", subcategory: "",
     unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
-    collectPrefs: false, isPersonal: false, storageLocationId: "", notes: "",
+    collectPrefs: false, isPersonal: false, sourceId: "", notes: "",
   };
 }
 
@@ -52,7 +53,7 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     isSpare: item.is_spare,
     collectPrefs: item.collect_prefs,
     isPersonal: item.is_personal,
-    storageLocationId: item.storage_location_id ?? "",
+    sourceId: item.source_id ?? "",
     notes: item.notes ?? "",
   };
 }
@@ -71,7 +72,7 @@ export function itemBodyFromDraft(d: ItemDraft) {
     is_spare: d.isSpare,
     collect_prefs: d.collectPrefs,
     is_personal: d.isPersonal,
-    storage_location_id: d.storageLocationId || null,
+    source_id: d.sourceId || null,
     notes: d.notes.trim() || null,
   };
 }
@@ -91,16 +92,16 @@ export function SelectField({ label, value, options, onChange }: {
   );
 }
 
-export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], locations = [], onManageLocations }: {
+export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], sources = [], onManageSources }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   autoFocusName?: boolean;
   /** Existing category names for the chosen type — lightweight autocomplete. */
   categoryHints?: string[];
-  /** Storage locations for the "Stored at" select. */
-  locations?: StorageLocation[];
-  /** Opens the storage-locations manager (shown as a link under the select). */
-  onManageLocations?: () => void;
+  /** Sources (storage / buyer / outfitter) for the "Source" select. */
+  sources?: Source[];
+  /** Opens the sources manager (shown as a link under the select). */
+  onManageSources?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -163,19 +164,19 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
         Spare — a backup item, not part of the working set
       </label>
       <div className="flex flex-col gap-1">
-        <SelectField label="Stored at (between trips)" value={draft.storageLocationId}
-          onChange={(v) => setDraft({ ...draft, storageLocationId: v })}
+        <SelectField label="Source — where it comes from" value={draft.sourceId}
+          onChange={(v) => setDraft({ ...draft, sourceId: v })}
           options={[
-            ["", locations.length > 0 ? "Nowhere in particular" : "No locations yet"],
-            ...locations.map((l): [string, string] => [l.id, l.name]),
+            ["", sources.length > 0 ? "Someone just brings it" : "No sources yet"],
+            ...sources.map((s): [string, string] => [s.id, sourceLabel(s) ?? s.name]),
           ]} />
         <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
-          {onManageLocations ? (
-            <button type="button" onClick={onManageLocations} style={{ color: "var(--accent-600)", fontWeight: 600 }}>
-              Manage storage locations…
+          {onManageSources ? (
+            <button type="button" onClick={onManageSources} style={{ color: "var(--accent-600)", fontWeight: 600 }}>
+              Manage sources…
             </button>
           ) : (
-            <>Locations (and who packs from them) are managed on the Inventory page.</>
+            <>Sources (and who packs from them) are managed on the Inventory page.</>
           )}
         </span>
       </div>

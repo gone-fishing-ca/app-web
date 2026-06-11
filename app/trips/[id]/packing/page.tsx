@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronRight, ClipboardList, Copy, Layers, Package, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ClipboardList, Copy, DollarSign, Layers, Package, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { Badge, Btn, Card, EmptyState, Field, ModalShell, SectionTitle, StatCard } from "@/components/ui";
 import { GroupHeader, TypeHeader, useFoldState } from "@/components/collapsible";
 import {
@@ -26,12 +26,12 @@ import {
   type QtyBasis,
   type QtyPeriod,
   type Segment,
+  type Source,
   type Stay,
-  type StorageLocation,
   type Trip,
   type TripLake,
 } from "@/lib/api";
-import { fmtQty, hintLabel, prefsAnswered, prefsTotal, suggestQty, tripFacts, unitsTotal } from "@/lib/packing";
+import { fmtQty, hintLabel, prefsAnswered, prefsTotal, sourceLabel, suggestQty, tripFacts, unitsTotal } from "@/lib/packing";
 
 const STATUS_NEXT: Record<PackLineStatus, PackLineStatus> = {
   planned: "purchased",
@@ -60,7 +60,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   const [otherTrips, setOtherTrips] = useState<Trip[]>([]);
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [tripLakes, setTripLakes] = useState<TripLake[]>([]);
-  const [locations, setLocations] = useState<StorageLocation[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
   const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
   const [addOpen, setAddOpen] = useState(false);
   // Scope for a header-launched "Add" — pre-filters the browser and prefills creation.
@@ -83,7 +83,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
     api.get<Box[]>(`/trips/${tripId}/boxes`).then(setBoxes).catch(() => {});
     api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setTripLakes).catch(() => {});
-    api.get<StorageLocation[]>(`/storage-locations`).then(setLocations).catch(() => {});
+    api.get<Source[]>(`/sources`).then(setSources).catch(() => {});
     api.get<Trip[]>(`/trips`).then((ts) => setOtherTrips(ts.filter((t) => t.id !== tripId))).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
@@ -121,10 +121,11 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     return null;
   }
 
-  /** Default "Packed by" for an item stored somewhere: the location's
-   *  responsible contact, when that person is on this trip's roster. */
+  /** Default "Packed by" for an item with a source: the source's responsible
+   *  contact (Greg packs from his house, Dave packs what he buys), when that
+   *  person is on this trip's roster. */
   function defaultPacker(item: InventoryItem): string | null {
-    const contactId = item.storage_location?.responsible_contact_id;
+    const contactId = item.source?.responsible_contact_id;
     if (!contactId) return null;
     return participants.find((p) => p.contact_id === contactId)?.id ?? null;
   }
@@ -167,6 +168,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   }
 
   const packedCount = (lines ?? []).filter((l) => l.status === "packed").length;
+  const spent = (lines ?? []).reduce((sum, l) => sum + (l.cost ?? 0), 0);
 
   async function patchLine(line: PackLine, body: Record<string, unknown>) {
     try {
@@ -257,9 +259,11 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
 
   return (
     <div className="p-4 sm:p-7 max-w-[1240px] mx-auto">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <StatCard icon={ClipboardList} label="On the list" value={lines?.length ?? 0} />
         <StatCard icon={Check} label="Packed" value={`${packedCount} / ${lines?.length ?? 0}`} tone="primary" />
+        <StatCard icon={DollarSign} label="Spent" value={spent > 0 ? `$${fmtQty(spent)}` : "—"}
+          foot={spent > 0 ? "costs entered on lines" : "enter costs via Edit"} />
         <StatCard icon={Users} label="People × days" value={facts.personDays || "—"}
           foot={`${facts.people} people · ${facts.cabins} cabins · ${facts.boats} boats`} />
       </div>
@@ -386,9 +390,11 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 {line.segment_id && <Badge tone="info">{segName.get(line.segment_id) ?? "Week"}</Badge>}
                                 {owner && <Badge tone="neutral">{owner}&rsquo;s</Badge>}
                               </div>
-                              {(line.notes || line.item.notes || hintLabel(line.item)) && (
+                              {(line.cost != null || line.notes || line.item.notes || hintLabel(line.item)) && (
                                 <div className="truncate text-[12px] mt-0.5" style={{ color: "var(--text-3)" }}>
-                                  {line.notes || line.item.notes || hintLabel(line.item)}
+                                  {[line.cost != null ? `$${fmtQty(line.cost)}` : null,
+                                    line.notes || line.item.notes || hintLabel(line.item)]
+                                    .filter(Boolean).join(" · ")}
                                 </div>
                               )}
                             </div>
@@ -472,8 +478,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               </select>
                             ) : (
                               <span className="text-[12.5px] truncate" style={{ color: "var(--text-3)" }}>
-                                {line.item.storage_location
-                                  ? `At ${line.item.storage_location.name} for each person`
+                                {line.item.source?.kind === "storage"
+                                  ? `At ${line.item.source.name} for each person`
                                   : "Everyone brings their own"}
                                 {line.people.filter((pp) => pp.packed).length > 0 &&
                                   ` · ${line.people.filter((pp) => pp.packed).length}/${participants.length} packed`}
@@ -559,7 +565,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           inventory={inventory}
           lines={lines ?? []}
           initial={addScope}
-          locations={locations}
+          sources={sources}
           defaultPacker={defaultPacker}
           onAdded={(line, item) => {
             setLines((prev) => (prev ? [...prev, line] : [line]));
@@ -586,7 +592,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           participants={participants}
           boxes={boxes}
           cabins={cabins}
-          locations={locations}
+          sources={sources}
           onSave={async (lineBody, itemBody) => {
             let ok = true;
             if (Object.keys(itemBody).length > 0) {
@@ -933,15 +939,15 @@ function BoxesModal({
 
 /* ---- Add items: search the master inventory, Instacart-style --------------- */
 function AddItemsModal({
-  tripId, inventory, lines, initial, locations, defaultPacker, onAdded, onClose,
+  tripId, inventory, lines, initial, sources, defaultPacker, onAdded, onClose,
 }: {
   tripId: string;
   inventory: InventoryItem[];
   lines: PackLine[];
   /** Header-launched adds arrive pre-scoped to a category/subcategory. */
   initial: { type: InventoryType; category: string | null; subcategory: string | null } | null;
-  locations: StorageLocation[];
-  /** Resolves a stored item's responsible contact to a roster row — the
+  sources: Source[];
+  /** Resolves an item's source-responsible contact to a roster row — the
    *  materialized "Packed by" default for new lines. */
   defaultPacker: (item: InventoryItem) => string | null;
   onAdded: (line: PackLine, item: InventoryItem) => void;
@@ -996,11 +1002,11 @@ function AddItemsModal({
 
   async function createAndAdd(draft: ItemDraft) {
     try {
-      const loc = locations.find((l) => l.id === draft.storageLocationId);
+      const src = sources.find((x) => x.id === draft.sourceId);
       const line = await api.post<PackLine>(`/trips/${tripId}/pack`, {
         new_item: itemBodyFromDraft(draft),
-        assignee_participant_id: loc
-          ? defaultPacker({ storage_location: loc } as InventoryItem)
+        assignee_participant_id: src
+          ? defaultPacker({ source: src } as InventoryItem)
           : null,
       });
       onAdded(line, line.item);
@@ -1024,7 +1030,7 @@ function AddItemsModal({
       )}
     >
       {creating ? (
-        <NewItemForm draft={creating} setDraft={setCreating} error={error} locations={locations}
+        <NewItemForm draft={creating} setDraft={setCreating} error={error} sources={sources}
           onCancel={() => setCreating(null)} onSubmit={() => void createAndAdd(creating)} />
       ) : (
         <div className="flex flex-col gap-3">
@@ -1099,18 +1105,18 @@ function AddItemsModal({
 }
 
 function NewItemForm({
-  draft, setDraft, error, locations, onCancel, onSubmit,
+  draft, setDraft, error, sources, onCancel, onSubmit,
 }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   error: string | null;
-  locations: StorageLocation[];
+  sources: Source[];
   onCancel: () => void;
   onSubmit: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <ItemFields draft={draft} setDraft={setDraft} autoFocusName locations={locations} />
+      <ItemFields draft={draft} setDraft={setDraft} autoFocusName sources={sources} />
       {error && (
         <div className="rounded-[10px] px-3 py-2 text-[13px]"
           style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
@@ -1125,14 +1131,14 @@ function NewItemForm({
 
 /* ---- Edit one line (+ its master inventory item) --------------------------- */
 function EditLineModal({
-  line, segments, participants, boxes, cabins, locations, onSave, onClose,
+  line, segments, participants, boxes, cabins, sources, onSave, onClose,
 }: {
   line: PackLine;
   segments: Segment[];
   participants: Participant[];
   boxes: Box[];
   cabins: { id: string; name: string }[];
-  locations: StorageLocation[];
+  sources: Source[];
   onSave: (lineBody: Record<string, unknown>, itemBody: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
 }) {
@@ -1150,6 +1156,10 @@ function EditLineModal({
   );
   const [segmentId, setSegmentId] = useState(line.segment_id ?? "");
   const [boxId, setBoxId] = useState(line.box_id ?? "");
+  // Cost capture for the balance sheet. Entering a cost with no payer assumes
+  // the packer fronted it.
+  const [cost, setCost] = useState(line.cost == null ? "" : String(line.cost));
+  const [paidBy, setPaidBy] = useState(line.paid_by_participant_id ?? "");
   const [notes, setNotes] = useState(line.notes ?? "");
   // Master item fields (saved back to the inventory catalog).
   const [name, setName] = useState(line.item.name);
@@ -1163,7 +1173,7 @@ function EditLineModal({
   const [defQty, setDefQty] = useState(line.item.default_qty == null ? "" : String(line.item.default_qty));
   const [basis, setBasis] = useState<QtyBasis>(line.item.qty_basis);
   const [period, setPeriod] = useState<QtyPeriod>(line.item.qty_period);
-  const [storedAt, setStoredAt] = useState(line.item.storage_location_id ?? "");
+  const [sourceId, setSourceId] = useState(line.item.source_id ?? "");
   const [itemNotes, setItemNotes] = useState(line.item.notes ?? "");
   const [busy, setBusy] = useState(false);
 
@@ -1183,6 +1193,10 @@ function EditLineModal({
     }
     if ((segmentId || null) !== line.segment_id) lineBody.segment_id = segmentId || null;
     if ((boxId || null) !== line.box_id) lineBody.box_id = boxId || null;
+    const nCost = cost === "" ? null : Number(cost);
+    if (nCost !== line.cost) lineBody.cost = nCost;
+    const nPaidBy = paidBy || (nCost != null ? assignee : "") || null;
+    if (nPaidBy !== line.paid_by_participant_id) lineBody.paid_by_participant_id = nPaidBy;
     if ((notes || null) !== line.notes) lineBody.notes = notes || null;
 
     const itemBody: Record<string, unknown> = {};
@@ -1198,7 +1212,7 @@ function EditLineModal({
     if (nDefQty !== line.item.default_qty) itemBody.default_qty = nDefQty;
     if (basis !== line.item.qty_basis) itemBody.qty_basis = basis;
     if (period !== line.item.qty_period) itemBody.qty_period = period;
-    if ((storedAt || null) !== line.item.storage_location_id) itemBody.storage_location_id = storedAt || null;
+    if ((sourceId || null) !== line.item.source_id) itemBody.source_id = sourceId || null;
     if ((itemNotes.trim() || null) !== line.item.notes) itemBody.notes = itemNotes.trim() || null;
     return { lineBody, itemBody };
   }
@@ -1248,16 +1262,16 @@ function EditLineModal({
             options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SelectField label="Stored at (between trips)" value={storedAt} onChange={setStoredAt}
+          <SelectField label="Source — where it comes from" value={sourceId} onChange={setSourceId}
             options={[
-              ["", locations.length > 0 ? "Nowhere in particular" : "No locations yet"],
-              ...locations.map((l): [string, string] => [l.id, l.name]),
+              ["", sources.length > 0 ? "Someone just brings it" : "No sources yet"],
+              ...sources.map((x): [string, string] => [x.id, sourceLabel(x) ?? x.name]),
             ]} />
           <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
         </div>
-        {locations.length === 0 && (
+        {sources.length === 0 && (
           <div className="-mt-2 text-[12px]" style={{ color: "var(--text-3)" }}>
-            Storage locations (and who packs from them) are managed on the Inventory page.
+            Sources (and who packs from them) are managed on the Inventory page.
           </div>
         )}
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
@@ -1307,6 +1321,20 @@ function EditLineModal({
           <SelectField label="Box" value={boxId} onChange={setBoxId}
             options={[["", "No box"], ...boxes.map((b) => [b.id, b.label] as [string, string])]} />
         )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Cost ($)" type="number" value={cost} onChange={(e) => setCost(e.target.value)}
+            placeholder="What it cost this trip" />
+          <SelectField label="Paid by" value={paidBy} onChange={setPaidBy}
+            options={[
+              ["", cost ? "Same as Packed by" : "—"],
+              ...participants.map((p) => [p.id, p.name] as [string, string]),
+            ]} />
+        </div>
+        <div className="-mt-2 text-[12px]" style={{ color: "var(--text-3)" }}>
+          {line.item.collect_prefs
+            ? "Splits by each person's pref amounts on the balance sheet."
+            : "Splits evenly across the group on the balance sheet."}
+        </div>
         <Field label="Trip notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Only for this trip" />
       </div>
     </ModalShell>

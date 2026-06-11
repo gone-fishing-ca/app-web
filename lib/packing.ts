@@ -1,4 +1,4 @@
-import type { InventoryItem, PackLine, PackPerson, PackUnit, Segment, Stay } from "./api";
+import type { InventoryItem, PackLine, PackPerson, PackUnit, Segment, Source, Stay } from "./api";
 
 /** The trip facts a quantity hint scales by. Derived client-side from data the
  *  packing pages already fetch — nothing is stored. A "boat" is just 2 people. */
@@ -116,12 +116,23 @@ export function prefsAnswered(line: PackLine): number {
   return line.people.filter((p) => p.pref_qty != null).length;
 }
 
+/** "At Greg's House" / "Bought by Dave" / "Flown in by Mattice Lake". */
+export function sourceLabel(s: Source | null | undefined): string | null {
+  if (!s) return null;
+  switch (s.kind) {
+    case "storage": return `At ${s.name}`;
+    case "buyer": return `Bought by ${s.name}`;
+    case "outfitter": return `Flown in by ${s.name}`;
+    default: return s.name;
+  }
+}
+
 /** Where one participant's copy of a personal line comes from: their override
- *  row when set, else stored when the item lives at a storage location. */
+ *  row when set, else stored when the item comes from a storage-kind source. */
 export function effectiveSource(line: PackLine, participantId: string): "self" | "stored" {
   const row = line.people.find((p) => p.participant_id === participantId);
   if (row?.source) return row.source;
-  return line.item.storage_location_id ? "stored" : "self";
+  return line.item.source?.kind === "storage" ? "stored" : "self";
 }
 
 export function personRow(line: PackLine, participantId: string): PackPerson | null {
