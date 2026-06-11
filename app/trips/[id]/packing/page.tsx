@@ -25,7 +25,6 @@ import {
   type Participant,
   type QtyBasis,
   type QtyPeriod,
-  type Responsibility,
   type Segment,
   type Stay,
   type StorageLocation,
@@ -34,11 +33,6 @@ import {
 } from "@/lib/api";
 import { fmtQty, hintLabel, prefsAnswered, prefsTotal, suggestQty, tripFacts, unitsTotal } from "@/lib/packing";
 
-const RESP_LABEL: Record<Responsibility, string> = {
-  shared: "Shared",
-  personal: "Personal",
-  personal_stored: "Stored @ HQ",
-};
 const STATUS_NEXT: Record<PackLineStatus, PackLineStatus> = {
   planned: "purchased",
   purchased: "packed",
@@ -443,28 +437,26 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                             </div>
                             )}
 
-                            {/* responsibility — inherits from the master item unless overridden */}
+                            {/* personal vs shared — inherits from the master item unless overridden */}
                             <select
-                              value={line.responsibility ?? ""}
-                              onChange={(e) => void patchLine(line, { responsibility: e.target.value || null })}
-                              title={line.responsibility ? "Overridden for this trip — pick the default to reset" : "Following the inventory item's default"}
+                              value={line.personal == null ? "" : line.personal ? "personal" : "shared"}
+                              onChange={(e) => void patchLine(line, { personal: e.target.value === "" ? null : e.target.value === "personal" })}
+                              title={line.personal != null ? "Overridden for this trip — pick the default to reset" : "Following the inventory item's default"}
                               className="rounded-[9px] px-2 py-1.5 text-[12.5px] font-semibold"
                               style={{
                                 background: "var(--surface-2)",
-                                border: `1px solid ${line.responsibility ? "var(--accent)" : "var(--border)"}`,
+                                border: `1px solid ${line.personal != null ? "var(--accent)" : "var(--border)"}`,
                                 color: "var(--text-2)",
                               }}
                             >
-                              <option value="">{RESP_LABEL[line.item.default_responsibility]}</option>
-                              {(Object.keys(RESP_LABEL) as Responsibility[])
-                                .filter((r) => r !== line.item.default_responsibility)
-                                .map((r) => (
-                                  <option key={r} value={r}>{RESP_LABEL[r]} (this trip)</option>
-                                ))}
+                              <option value="">{line.item.is_personal ? "Personal" : "Shared"}</option>
+                              <option value={line.item.is_personal ? "shared" : "personal"}>
+                                {line.item.is_personal ? "Shared" : "Personal"} (this trip)
+                              </option>
                             </select>
 
                             {/* packed-by (shared) / people summary (personal) */}
-                            {line.effective_responsibility === "shared" ? (
+                            {!line.effective_personal ? (
                               <select
                                 value={line.assignee_participant_id ?? ""}
                                 onChange={(e) => void patchLine(line, { assignee_participant_id: e.target.value || null })}
@@ -480,7 +472,9 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               </select>
                             ) : (
                               <span className="text-[12.5px] truncate" style={{ color: "var(--text-3)" }}>
-                                {line.effective_responsibility === "personal_stored" ? "At HQ for each person" : "Everyone brings their own"}
+                                {line.item.storage_location
+                                  ? `At ${line.item.storage_location.name} for each person`
+                                  : "Everyone brings their own"}
                                 {line.people.filter((pp) => pp.packed).length > 0 &&
                                   ` · ${line.people.filter((pp) => pp.packed).length}/${participants.length} packed`}
                               </span>
@@ -602,7 +596,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                 setLines((prev) => prev?.map((l) => (l.inventory_item_id === item.id ? {
                   ...l, item,
                   effective_unit: l.unit ?? item.default_unit,
-                  effective_responsibility: l.responsibility ?? item.default_responsibility,
+                  effective_personal: l.personal ?? item.is_personal,
                 } : l)) ?? null);
                 setInventory((prev) => prev.map((i) => (i.id === item.id ? item : i)));
               } catch (e) {
@@ -1142,10 +1136,12 @@ function EditLineModal({
   onSave: (lineBody: Record<string, unknown>, itemBody: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
 }) {
-  // Trip-level fields. unit/resp are the raw overrides — "" = inherit.
+  // Trip-level fields. unit/personal are the raw overrides — "" = inherit.
   const [qty, setQty] = useState(line.quantity == null ? "" : String(line.quantity));
   const [unit, setUnit] = useState(line.unit ?? "");
-  const [resp, setResp] = useState<Responsibility | "">(line.responsibility ?? "");
+  const [personal, setPersonal] = useState(
+    line.personal == null ? "" : line.personal ? "personal" : "shared",
+  );
   const [assignee, setAssignee] = useState(line.assignee_participant_id ?? "");
   // One "Belongs to" select encodes both owner FKs: "" = the group's.
   const [owner, setOwner] = useState(
@@ -1161,7 +1157,7 @@ function EditLineModal({
   const [category, setCategory] = useState(line.item.category ?? "");
   const [subcategory, setSubcategory] = useState(line.item.subcategory ?? "");
   const [defUnit, setDefUnit] = useState(line.item.default_unit ?? "");
-  const [defResp, setDefResp] = useState<Responsibility>(line.item.default_responsibility);
+  const [isPersonal, setIsPersonal] = useState(line.item.is_personal);
   const [isSpare, setIsSpare] = useState(line.item.is_spare);
   const [collectPrefs, setCollectPrefs] = useState(line.item.collect_prefs);
   const [defQty, setDefQty] = useState(line.item.default_qty == null ? "" : String(line.item.default_qty));
@@ -1176,7 +1172,8 @@ function EditLineModal({
     const nQty = qty === "" ? null : Number(qty);
     if (nQty !== line.quantity) lineBody.quantity = nQty;
     if ((unit.trim() || null) !== line.unit) lineBody.unit = unit.trim() || null;
-    if ((resp || null) !== line.responsibility) lineBody.responsibility = resp || null;
+    const nPersonal = personal === "" ? null : personal === "personal";
+    if (nPersonal !== line.personal) lineBody.personal = nPersonal;
     if ((assignee || null) !== line.assignee_participant_id) lineBody.assignee_participant_id = assignee || null;
     const ownerP = owner.startsWith("p:") ? owner.slice(2) : null;
     const ownerC = owner.startsWith("c:") ? owner.slice(2) : null;
@@ -1194,7 +1191,7 @@ function EditLineModal({
     if ((category.trim() || null) !== line.item.category) itemBody.category = category.trim() || null;
     if ((subcategory.trim() || null) !== line.item.subcategory) itemBody.subcategory = subcategory.trim() || null;
     if ((defUnit.trim() || null) !== line.item.default_unit) itemBody.default_unit = defUnit.trim() || null;
-    if (defResp !== line.item.default_responsibility) itemBody.default_responsibility = defResp;
+    if (isPersonal !== line.item.is_personal) itemBody.is_personal = isPersonal;
     if (isSpare !== line.item.is_spare) itemBody.is_spare = isSpare;
     if (collectPrefs !== line.item.collect_prefs) itemBody.collect_prefs = collectPrefs;
     const nDefQty = defQty === "" ? null : Number(defQty);
@@ -1251,22 +1248,26 @@ function EditLineModal({
             options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SelectField label="Who brings it" value={defResp} onChange={(v) => setDefResp(v as Responsibility)}
-            options={[["shared", "Shared"], ["personal", "Personal"], ["personal_stored", "Stored @ HQ"]]} />
           <SelectField label="Stored at (between trips)" value={storedAt} onChange={setStoredAt}
             options={[
               ["", locations.length > 0 ? "Nowhere in particular" : "No locations yet"],
               ...locations.map((l): [string, string] => [l.id, l.name]),
             ]} />
+          <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
         </div>
         {locations.length === 0 && (
           <div className="-mt-2 text-[12px]" style={{ color: "var(--text-3)" }}>
             Storage locations (and who packs from them) are managed on the Inventory page.
           </div>
         )}
-        <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
-          <input type="checkbox" checked={collectPrefs} onChange={(e) => setCollectPrefs(e.target.checked)} />
+          <input type="checkbox" checked={isPersonal}
+            onChange={(e) => { setIsPersonal(e.target.checked); if (e.target.checked) setCollectPrefs(false); }} />
+          Personal — everyone brings their own (if they want)
+        </label>
+        <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
+          <input type="checkbox" checked={collectPrefs}
+            onChange={(e) => { setCollectPrefs(e.target.checked); if (e.target.checked) setIsPersonal(false); }} />
           Prefs — members say how many they want before the trip (replaces the hint)
         </label>
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
@@ -1283,15 +1284,14 @@ function EditLineModal({
             options={[["", "Whole trip"], ...segments.map((s) => [s.id, s.name] as [string, string])]} />
           <Field label="Unit (override)" value={unit} onChange={(e) => setUnit(e.target.value)}
             placeholder={`Inherit (${line.item.default_unit || "—"})`} />
-          <SelectField label="Who brings it" value={resp} onChange={(v) => setResp(v as Responsibility | "")}
+          <SelectField label="Personal (override)" value={personal} onChange={setPersonal}
             options={[
-              ["", `Inherit (${RESP_LABEL[line.item.default_responsibility]})`],
+              ["", `Inherit (${line.item.is_personal ? "Personal" : "Shared"})`],
               ["shared", "Shared (this trip)"],
               ["personal", "Personal (this trip)"],
-              ["personal_stored", "Stored @ HQ (this trip)"],
             ]} />
         </div>
-        {(resp || line.item.default_responsibility) === "shared" && (
+        {(personal === "" ? !line.item.is_personal : personal === "shared") && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <SelectField label="Packed by" value={assignee} onChange={setAssignee}
               options={[["", "Unassigned"], ...participants.map((p) => [p.id, p.name] as [string, string])]} />

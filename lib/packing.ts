@@ -117,11 +117,11 @@ export function prefsAnswered(line: PackLine): number {
 }
 
 /** Where one participant's copy of a personal line comes from: their override
- *  row when set, else the line's responsibility. */
+ *  row when set, else stored when the item lives at a storage location. */
 export function effectiveSource(line: PackLine, participantId: string): "self" | "stored" {
   const row = line.people.find((p) => p.participant_id === participantId);
   if (row?.source) return row.source;
-  return line.effective_responsibility === "personal_stored" ? "stored" : "self";
+  return line.item.storage_location_id ? "stored" : "self";
 }
 
 export function personRow(line: PackLine, participantId: string): PackPerson | null {

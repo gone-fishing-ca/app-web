@@ -25,12 +25,6 @@ import {
 import { useAuth } from "@/lib/auth";
 import { hintLabel } from "@/lib/packing";
 
-const RESP_BADGE: Record<string, string> = {
-  shared: "Shared",
-  personal: "Personal",
-  personal_stored: "Stored @ HQ",
-};
-
 function errMsg(e: unknown, fallback: string): string {
   return e && typeof e === "object" && "message" in e
     ? String((e as { message?: string }).message)
@@ -273,9 +267,8 @@ export default function InventoryPage() {
                               item.notes].filter(Boolean).join(" · ") || "—"}
                           </div>
                         </div>
-                        <Badge tone={item.default_responsibility === "shared" ? "neutral" : "info"}>
-                          {RESP_BADGE[item.default_responsibility]}
-                        </Badge>
+                        {item.is_personal && <Badge tone="info">Personal</Badge>}
+                        {item.collect_prefs && <Badge tone="info">Prefs</Badge>}
                         <div className="flex items-center gap-1">
                           <button onClick={() => setEditing({ item, draft: draftFromItem(item) })} title="Edit"
                             className="grid place-items-center"

@@ -7,7 +7,6 @@ import {
   type InventoryType,
   type QtyBasis,
   type QtyPeriod,
-  type Responsibility,
   type StorageLocation,
 } from "@/lib/api";
 
@@ -25,7 +24,7 @@ export type ItemDraft = {
   period: QtyPeriod;
   isSpare: boolean; // a backup item, not part of the working set
   collectPrefs: boolean; // quantity from member prefs instead of the hint
-  responsibility: Responsibility;
+  isPersonal: boolean; // everyone brings their own; off = shared/managed
   storageLocationId: string; // "" = nowhere in particular
   notes: string;
 };
@@ -36,7 +35,7 @@ export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDra
   return {
     name: name.trim(), item_type: type, category: "", subcategory: "",
     unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
-    collectPrefs: false, responsibility: "shared", storageLocationId: "", notes: "",
+    collectPrefs: false, isPersonal: false, storageLocationId: "", notes: "",
   };
 }
 
@@ -52,7 +51,7 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     period: item.qty_period,
     isSpare: item.is_spare,
     collectPrefs: item.collect_prefs,
-    responsibility: item.default_responsibility,
+    isPersonal: item.is_personal,
     storageLocationId: item.storage_location_id ?? "",
     notes: item.notes ?? "",
   };
@@ -71,7 +70,7 @@ export function itemBodyFromDraft(d: ItemDraft) {
     qty_period: d.period,
     is_spare: d.isSpare,
     collect_prefs: d.collectPrefs,
-    default_responsibility: d.responsibility,
+    is_personal: d.isPersonal,
     storage_location_id: d.storageLocationId || null,
     notes: d.notes.trim() || null,
   };
@@ -146,9 +145,16 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
           <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="bottles / —" />
         </div>
       )}
+      {/* Personal and Prefs are mutually exclusive: prefs means the group's
+          packer brings it and members only size the quantity. */}
+      <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
+        <input type="checkbox" checked={draft.isPersonal}
+          onChange={(e) => setDraft({ ...draft, isPersonal: e.target.checked, collectPrefs: e.target.checked ? false : draft.collectPrefs })} />
+        Personal — everyone brings their own (if they want)
+      </label>
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
         <input type="checkbox" checked={draft.collectPrefs}
-          onChange={(e) => setDraft({ ...draft, collectPrefs: e.target.checked })} />
+          onChange={(e) => setDraft({ ...draft, collectPrefs: e.target.checked, isPersonal: e.target.checked ? false : draft.isPersonal })} />
         Prefs — members say how many they want before the trip (replaces the hint)
       </label>
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
@@ -156,13 +162,6 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
           onChange={(e) => setDraft({ ...draft, isSpare: e.target.checked })} />
         Spare — a backup item, not part of the working set
       </label>
-      <SelectField label="Who brings it (default)" value={draft.responsibility}
-        onChange={(v) => setDraft({ ...draft, responsibility: v as Responsibility })}
-        options={[
-          ["shared", "Shared — someone brings it for the group"],
-          ["personal", "Personal — everyone brings their own"],
-          ["personal_stored", "Personal, stored at HQ between trips"],
-        ]} />
       <div className="flex flex-col gap-1">
         <SelectField label="Stored at (between trips)" value={draft.storageLocationId}
           onChange={(v) => setDraft({ ...draft, storageLocationId: v })}

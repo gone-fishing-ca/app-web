@@ -270,7 +270,6 @@ export type InventoryType = "Food" | "Beverages" | "Gear" | "Tackle" | "Misc";
 export const INVENTORY_TYPES: InventoryType[] = ["Food", "Beverages", "Gear", "Tackle", "Misc"];
 export type QtyBasis = "per_person" | "per_person_peak" | "per_cabin" | "per_boat" | "per_group";
 export type QtyPeriod = "per_trip" | "per_day";
-export type Responsibility = "shared" | "personal" | "personal_stored";
 export type PackLineStatus = "planned" | "purchased" | "packed";
 export type PackSource = "self" | "stored";
 
@@ -303,7 +302,7 @@ export type InventoryItem = {
   qty_period: QtyPeriod;
   is_spare: boolean; // a backup item, not part of the working set — badged, sorted last
   collect_prefs: boolean; // quantity comes from member prefs, not the hint
-  default_responsibility: Responsibility;
+  is_personal: boolean; // everyone brings their own (if they want); off = shared/managed
   storage_location_id: string | null;
   storage_location: StorageLocation | null; // embedded for display + packer defaulting
   notes: string | null;
@@ -311,7 +310,8 @@ export type InventoryItem = {
 };
 
 /** One participant's slice of a pack line. `source` overrides where their copy
- *  comes from on personal lines (null = inherit from the line's responsibility);
+ *  comes from on personal lines (null = inherit: stored when the line is
+ *  personal and the item has a storage location, else self);
  *  `pref_qty` is their pre-trip answer on prefs lines (null = hasn't answered,
  *  0 = none for me). */
 export type PackPerson = {
@@ -359,11 +359,11 @@ export type PackUnit = {
 };
 
 /** An inventory item on this trip's packing list (GET /trips/{id}/pack), with
- *  trip-specific quantity/responsibility/progress layered on. `segment_id`
+ *  trip-specific quantity/overrides/progress layered on. `segment_id`
  *  scopes a line to one week (null = whole trip). `box_id` boxes an
  *  un-itemized line; itemized lines box per unit.
  *
- *  `unit`/`responsibility` are the raw overrides — null means "inherit from
+ *  `unit`/`personal` are the raw overrides — null means "inherit from
  *  the master item" (cf. Stay dates). Display the `effective_*` fields. */
 export type PackLine = {
   id: string;
@@ -371,9 +371,9 @@ export type PackLine = {
   inventory_item_id: string;
   quantity: number | null;
   unit: string | null;
-  responsibility: Responsibility | null;
+  personal: boolean | null;
   effective_unit: string | null;
-  effective_responsibility: Responsibility;
+  effective_personal: boolean;
   // Who *packs* it ("Packed by") vs who it *belongs to* on the trip: a person
   // or a cabin, at most one — both null = the group's.
   assignee_participant_id: string | null;

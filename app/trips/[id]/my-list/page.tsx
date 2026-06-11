@@ -47,7 +47,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
     // Itemized lines speak through their unit assignments instead of the
     // generic everyone-gets-one rows.
     const personal = (lines ?? []).filter(
-      (l) => (l.effective_responsibility === "personal" || l.effective_responsibility === "personal_stored") && l.units.length === 0,
+      (l) => l.effective_personal && l.units.length === 0,
     );
     const assigned: { line: PackLine; unit: PackUnit; segmentIds: string[] }[] = [];
     for (const l of lines ?? []) {
@@ -60,7 +60,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
       bring: personal.filter((l) => participantId && effectiveSource(l, participantId) === "self"),
       stored: personal.filter((l) => participantId && effectiveSource(l, participantId) === "stored"),
       shared: (lines ?? []).filter(
-        (l) => l.effective_responsibility === "shared" && l.assignee_participant_id === participantId,
+        (l) => !l.effective_personal && l.assignee_participant_id === participantId,
       ),
       assignedUnits: assigned,
       // Belongs to this person on the trip, but someone else packs it (lines
@@ -261,8 +261,8 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
           )}
           <Section icon={Luggage} title="You bring" flip="stored"
             subtitle="Pack these yourself — they fly with you." list={bring} />
-          <Section icon={Home} title="Stored at HQ for you" flip="self"
-            subtitle="Already in the Chicago closet — the organizer brings these up." list={stored} />
+          <Section icon={Home} title="Stored for you" flip="self"
+            subtitle="Your copies live at the group's storage between trips — they come up with the group gear." list={stored} />
           {assignedUnits.length > 0 && (
             <Card>
               <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5">
