@@ -156,7 +156,7 @@ function DayCell({
 
   return (
     <div
-      className="flex flex-col px-1 sm:px-1.5 pb-2 min-h-[84px] sm:min-h-[var(--cell-h)]"
+      className="flex flex-col px-1 sm:px-1.5 pb-2 min-h-[64px] sm:min-h-[var(--cell-h)]"
       style={{
         "--cell-h": `${minH}px`,
         borderTop: topBorder ? "1px solid var(--border)" : undefined,
@@ -191,7 +191,7 @@ function ItemChip({ item, onClick }: { item: ItineraryItem; onClick: () => void 
     <button
       onClick={onClick}
       title={item.title}
-      className="flex w-full items-center gap-1 rounded-[7px] px-1.5 py-1 text-left text-[11px] font-semibold transition hover:brightness-95"
+      className="hidden w-full items-center gap-1 rounded-[7px] px-1.5 py-1 text-left text-[11px] font-semibold transition hover:brightness-95 sm:flex"
       style={{ background: m.bg, color: m.fg, border: "1px solid transparent" }}
     >
       <m.Icon size={12} strokeWidth={2.2} className="flex-none" />

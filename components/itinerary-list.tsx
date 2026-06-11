@@ -89,6 +89,12 @@ function ItemRow({ item, people, onClick }: { item: ItineraryItem; people: Parti
             {sub}
           </span>
         )}
+        {/* Phones: the avatars wrap under the details — no room on the right. */}
+        {people.length > 0 && (
+          <span className="mt-1.5 flex sm:hidden">
+            <AvatarStack people={people} />
+          </span>
+        )}
       </span>
       {time && (
         <span className="gf-mono flex-none text-[12px]" style={{ color: "var(--text-2)" }}>
@@ -96,20 +102,23 @@ function ItemRow({ item, people, onClick }: { item: ItineraryItem; people: Parti
         </span>
       )}
       {people.length > 0 && (
-        <span className="flex flex-none items-center">
-          {people.map((p, i) => (
-            <span
-              key={p.id}
-              title={p.name}
-              className="rounded-full"
-              style={{ marginLeft: i ? -7 : 0, boxShadow: "0 0 0 2px var(--surface)" }}
-            >
-              <Avatar initials={initialsOf(p.name, p.email)} src={p.avatar_url} size={24} />
-            </span>
-          ))}
+        <span className="hidden sm:flex">
+          <AvatarStack people={people} />
         </span>
       )}
     </button>
+  );
+}
+
+function AvatarStack({ people }: { people: Participant[] }) {
+  return (
+    <span className="flex flex-none flex-wrap items-center gap-1">
+      {people.map((p) => (
+        <span key={p.id} title={p.name}>
+          <Avatar initials={initialsOf(p.name, p.email)} src={p.avatar_url} size={24} />
+        </span>
+      ))}
+    </span>
   );
 }
 
