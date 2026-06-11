@@ -302,6 +302,7 @@ export type InventoryItem = {
   qty_basis: QtyBasis;
   qty_period: QtyPeriod;
   is_spare: boolean; // a backup item, not part of the working set — badged, sorted last
+  collect_prefs: boolean; // quantity comes from member prefs, not the hint
   default_responsibility: Responsibility;
   storage_location_id: string | null;
   storage_location: StorageLocation | null; // embedded for display + packer defaulting
@@ -309,13 +310,16 @@ export type InventoryItem = {
   archived: boolean;
 };
 
-/** One participant's slice of a personal pack line. `source` overrides where
- *  their copy comes from (null = inherit from the line's responsibility). */
+/** One participant's slice of a pack line. `source` overrides where their copy
+ *  comes from on personal lines (null = inherit from the line's responsibility);
+ *  `pref_qty` is their pre-trip answer on prefs lines (null = hasn't answered,
+ *  0 = none for me). */
 export type PackPerson = {
   id: string;
   pack_item_id: string;
   participant_id: string;
   source: PackSource | null;
+  pref_qty: number | null;
   packed: boolean;
 };
 

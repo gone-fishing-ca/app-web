@@ -50,8 +50,10 @@ export function tripFacts(
 }
 
 /** Suggested quantity for an item from its hint × the trip facts, or null when
- *  the hint or the facts aren't there yet. */
+ *  the hint or the facts aren't there yet. Prefs items don't use the hint —
+ *  their suggestion is the sum of member answers (see `prefsTotal`). */
 export function suggestQty(item: InventoryItem, facts: TripFacts): number | null {
+  if (item.collect_prefs) return null;
   if (item.default_qty == null) return null;
   const q = item.default_qty;
   if (item.qty_period === "per_day") {
@@ -79,6 +81,7 @@ function round1(n: number): number {
 
 /** "0.25 loaves / person / day" — how the hint reads in the UI. */
 export function hintLabel(item: InventoryItem): string | null {
+  if (item.collect_prefs) return "Prefs — members choose amounts";
   if (item.default_qty == null) return null;
   const basis = {
     per_person: "person",
@@ -101,6 +104,16 @@ export function fmtQty(n: number): string {
  *  a split portion (12 of the 24 batteries). */
 export function unitsTotal(units: PackUnit[]): number {
   return units.reduce((sum, u) => sum + (u.quantity ?? 1), 0);
+}
+
+/** A prefs line's suggested quantity: the sum of member answers so far. */
+export function prefsTotal(line: PackLine): number {
+  return line.people.reduce((sum, p) => sum + (p.pref_qty ?? 0), 0);
+}
+
+/** How many people have answered a prefs line (0 counts as an answer). */
+export function prefsAnswered(line: PackLine): number {
+  return line.people.filter((p) => p.pref_qty != null).length;
 }
 
 /** Where one participant's copy of a personal line comes from: their override

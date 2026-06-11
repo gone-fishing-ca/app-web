@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { Backpack, Home, Luggage, Tag } from "lucide-react";
+import { Backpack, Home, Luggage, SlidersHorizontal, Tag } from "lucide-react";
 import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
 import {
   api,
@@ -43,7 +43,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
   const participantId = selected || me?.id || participants[0]?.id || "";
   const participant = participants.find((p) => p.id === participantId) ?? null;
 
-  const { bring, stored, shared, assignedUnits, owned } = useMemo(() => {
+  const { bring, stored, shared, assignedUnits, owned, prefs } = useMemo(() => {
     // Itemized lines speak through their unit assignments instead of the
     // generic everyone-gets-one rows.
     const personal = (lines ?? []).filter(
@@ -68,12 +68,14 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
       owned: (lines ?? []).filter(
         (l) => l.owner_participant_id === participantId && l.assignee_participant_id !== participantId,
       ),
+      // Prefs: lines asking everyone "how many do you want?" before the trip.
+      prefs: (lines ?? []).filter((l) => l.item.collect_prefs),
     };
   }, [lines, participantId]);
 
   const segName = useMemo(() => new Map(segments.map((s) => [s.id, s.name])), [segments]);
 
-  async function setPerson(line: PackLine, body: { packed?: boolean; source?: "self" | "stored" | null }) {
+  async function setPerson(line: PackLine, body: { packed?: boolean; source?: "self" | "stored" | null; pref_qty?: number | null }) {
     if (!participantId) return;
     try {
       const saved = await api.put<PackPerson>(`/trips/${tripId}/pack/people`, {
@@ -196,11 +198,67 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
 
       {lines === null ? (
         <div style={{ color: "var(--text-3)" }}>Loading…</div>
-      ) : bring.length + stored.length + shared.length + assignedUnits.length + owned.length === 0 ? (
+      ) : bring.length + stored.length + shared.length + assignedUnits.length + owned.length + prefs.length === 0 ? (
         <EmptyState icon={Backpack} title="Nothing assigned yet"
           subtitle="Personal items and shared items assigned to this person will show up here as the Packing list comes together." />
       ) : (
         <div className="flex flex-col gap-5">
+          {prefs.length > 0 && (
+            <Card>
+              <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5">
+                <SlidersHorizontal size={18} strokeWidth={1.9} style={{ color: "var(--accent-600)" }} />
+                <div className="flex-1 min-w-0">
+                  <div style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: "var(--display-weight)" as unknown as number,
+                    letterSpacing: "var(--display-tracking)",
+                    fontSize: 16.5, color: "var(--text)",
+                  }}>
+                    Your prefs
+                  </div>
+                  <div className="text-[12px]" style={{ color: "var(--text-3)" }}>
+                    How many do you want? Answer before the trip — 0 means none for you.
+                  </div>
+                </div>
+                <Badge tone={prefs.every((l) => (personRow(l, participantId)?.pref_qty ?? null) != null) ? "success" : "neutral"}>
+                  {prefs.filter((l) => (personRow(l, participantId)?.pref_qty ?? null) != null).length} / {prefs.length} answered
+                </Badge>
+              </div>
+              {prefs.map((line) => {
+                const row = participantId ? personRow(line, participantId) : null;
+                const sub = line.notes || line.item.notes || null;
+                return (
+                  <div key={line.id} className="flex items-center gap-3 px-4 sm:px-5 py-2.5"
+                    style={{ borderTop: "1px solid var(--border)" }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>
+                        {line.item.name}
+                      </div>
+                      {sub && <div className="truncate text-[12px]" style={{ color: "var(--text-3)" }}>{sub}</div>}
+                    </div>
+                    <input
+                      key={`${line.id}-${participantId}`}
+                      type="number" inputMode="decimal" min={0} step="any"
+                      defaultValue={row?.pref_qty ?? ""}
+                      placeholder="—"
+                      onBlur={(e) => {
+                        const v = e.target.value === "" ? null : Number(e.target.value);
+                        if (v !== (row?.pref_qty ?? null)) void setPerson(line, { pref_qty: v });
+                      }}
+                      className="w-[64px] flex-none rounded-[9px] px-2 py-1.5 text-[13.5px] text-right gf-mono outline-none"
+                      style={{
+                        background: "var(--surface)", border: "1px solid var(--border-strong)",
+                        color: row?.pref_qty == null ? "var(--text-3)" : "var(--text)",
+                      }}
+                    />
+                    {line.effective_unit && (
+                      <span className="text-[12px] flex-none" style={{ color: "var(--text-3)" }}>{line.effective_unit}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </Card>
+          )}
           <Section icon={Luggage} title="You bring" flip="stored"
             subtitle="Pack these yourself — they fly with you." list={bring} />
           <Section icon={Home} title="Stored at HQ for you" flip="self"

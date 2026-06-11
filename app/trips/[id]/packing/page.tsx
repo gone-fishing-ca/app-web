@@ -20,6 +20,7 @@ import {
   type PackCopyResult,
   type PackLine,
   type PackLineStatus,
+  type PackPerson,
   type PackUnit,
   type Participant,
   type QtyBasis,
@@ -31,7 +32,7 @@ import {
   type Trip,
   type TripLake,
 } from "@/lib/api";
-import { fmtQty, hintLabel, suggestQty, tripFacts, unitsTotal } from "@/lib/packing";
+import { fmtQty, hintLabel, prefsAnswered, prefsTotal, suggestQty, tripFacts, unitsTotal } from "@/lib/packing";
 
 const RESP_LABEL: Record<Responsibility, string> = {
   shared: "Shared",
@@ -233,6 +234,20 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     }
   }
 
+  async function setPref(line: PackLine, participantId: string, prefQty: number | null) {
+    try {
+      const saved = await api.put<PackPerson>(`/trips/${tripId}/pack/people`, {
+        pack_item_id: line.id, participant_id: participantId, pref_qty: prefQty,
+      });
+      setLines((prev) => prev?.map((l) => (l.id === line.id ? {
+        ...l,
+        people: [...l.people.filter((pp) => pp.id !== saved.id && pp.participant_id !== participantId), saved],
+      } : l)) ?? null);
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+  }
+
   async function copyFrom(sourceId: string) {
     try {
       const res = await api.post<PackCopyResult>(`/trips/${tripId}/pack/copy-from/${sourceId}`);
@@ -356,7 +371,10 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               onAdd={() => openAdd({ type, category: cat === "General" ? null : cat, subcategory: sub })} />
                           )}
                           {subOpen && group.map((line) => {
-                        const suggestion = suggestQty(line.item, line.segment_id ? tripFacts(participants.length, segments, stays, line.segment_id) : facts);
+                        // Prefs lines suggest the sum of member answers; everything else from the hint.
+                        const suggestion = line.item.collect_prefs
+                          ? (prefsAnswered(line) > 0 ? prefsTotal(line) : null)
+                          : suggestQty(line.item, line.segment_id ? tripFacts(participants.length, segments, stays, line.segment_id) : facts);
                         const itemized = line.units.length > 0;
                         const unitQty = unitsTotal(line.units);
                         const owner = ownerLabel(line);
@@ -370,6 +388,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>{line.item.name}</span>
                                 {line.item.is_spare && <Badge tone="warning">Spare</Badge>}
+                                {line.item.collect_prefs && <Badge tone="info">Prefs</Badge>}
                                 {line.segment_id && <Badge tone="info">{segName.get(line.segment_id) ?? "Week"}</Badge>}
                                 {owner && <Badge tone="neutral">{owner}&rsquo;s</Badge>}
                               </div>
@@ -409,9 +428,18 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 className="w-[64px] rounded-[9px] px-2 py-1.5 text-[13.5px] text-right gf-mono outline-none"
                                 style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: line.quantity == null ? "var(--text-3)" : "var(--text)" }}
                               />
+                              {line.item.collect_prefs ? (
+                                <button onClick={() => toggleExpanded(line.id)}
+                                  title="Member prefs — who wants how many"
+                                  className="text-[12px] font-semibold flex-none rounded-full px-2 py-0.5"
+                                  style={{ background: "var(--accent-100)", color: "var(--accent-600)" }}>
+                                  {prefsAnswered(line)}/{participants.length} prefs
+                                </button>
+                              ) : (
                               <span className="text-[12px] truncate" style={{ color: "var(--text-3)" }}>
                                 {line.effective_unit || (line.quantity == null && suggestion != null ? "suggested" : "")}
                               </span>
+                              )}
                             </div>
                             )}
 
@@ -466,7 +494,8 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                             {/* row actions */}
                             <div className="flex items-center justify-end gap-1">
                               <button onClick={() => toggleExpanded(line.id)}
-                                title={itemized ? "Show units" : "Itemize — label, assign, and box individual units"}
+                                title={line.item.collect_prefs ? "Member prefs — who wants how many"
+                                  : itemized ? "Show units" : "Itemize — label, assign, and box individual units"}
                                 className="grid place-items-center"
                                 style={{
                                   width: 28, height: 28, borderRadius: 7,
@@ -489,7 +518,14 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                             </div>
                           </div>
 
-                          {isOpen && (
+                          {isOpen && line.item.collect_prefs && (
+                            <PrefsPanel
+                              line={line}
+                              participants={participants}
+                              onSet={(pid, qty) => void setPref(line, pid, qty)}
+                            />
+                          )}
+                          {isOpen && !line.item.collect_prefs && (
                             <UnitPanel
                               line={line}
                               segments={line.segment_id ? segments.filter((s) => s.id === line.segment_id) : segments}
@@ -598,6 +634,58 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           </div>
         </ModalShell>
       )}
+    </div>
+  );
+}
+
+/* ---- Prefs: who wants how many, gathered before the trip --------------------
+   Each member answers on their My-list page; the organizer sees (and can fill
+   in) the grid here. Blank = hasn't answered, 0 = none for me; the sum is the
+   line's suggested quantity. */
+function PrefsPanel({ line, participants, onSet }: {
+  line: PackLine;
+  participants: Participant[];
+  onSet: (participantId: string, prefQty: number | null) => void;
+}) {
+  const answered = prefsAnswered(line);
+  return (
+    <div className="px-4 sm:px-5 pb-3">
+      <div className="rounded-[12px] px-3 py-2"
+        style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+        <div className="flex items-center justify-between py-1 text-[11px] font-bold uppercase"
+          style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
+          <span>Prefs — how many does each person want?</span>
+          <span className="gf-mono">
+            {answered}/{participants.length} answered · total {fmtQty(prefsTotal(line))}
+            {line.effective_unit ? ` ${line.effective_unit}` : ""}
+          </span>
+        </div>
+        <div className="grid gap-x-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))" }}>
+          {participants.map((p) => {
+            const row = line.people.find((pp) => pp.participant_id === p.id);
+            return (
+              <div key={p.id} className="flex items-center justify-between gap-2 py-1.5"
+                style={{ borderTop: "1px solid var(--border)" }}>
+                <span className="truncate text-[13px]" style={{ color: "var(--text)" }}>{p.name}</span>
+                <input
+                  type="number" inputMode="decimal" min={0} step="any"
+                  defaultValue={row?.pref_qty ?? ""}
+                  placeholder="—"
+                  onBlur={(e) => {
+                    const v = e.target.value === "" ? null : Number(e.target.value);
+                    if (v !== (row?.pref_qty ?? null)) onSet(p.id, v);
+                  }}
+                  className="w-[56px] flex-none rounded-[8px] px-2 py-1 text-[13px] text-right gf-mono outline-none"
+                  style={{
+                    background: "var(--surface)", border: "1px solid var(--border)",
+                    color: row?.pref_qty == null ? "var(--text-3)" : "var(--text)",
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1075,6 +1163,7 @@ function EditLineModal({
   const [defUnit, setDefUnit] = useState(line.item.default_unit ?? "");
   const [defResp, setDefResp] = useState<Responsibility>(line.item.default_responsibility);
   const [isSpare, setIsSpare] = useState(line.item.is_spare);
+  const [collectPrefs, setCollectPrefs] = useState(line.item.collect_prefs);
   const [defQty, setDefQty] = useState(line.item.default_qty == null ? "" : String(line.item.default_qty));
   const [basis, setBasis] = useState<QtyBasis>(line.item.qty_basis);
   const [period, setPeriod] = useState<QtyPeriod>(line.item.qty_period);
@@ -1107,6 +1196,7 @@ function EditLineModal({
     if ((defUnit.trim() || null) !== line.item.default_unit) itemBody.default_unit = defUnit.trim() || null;
     if (defResp !== line.item.default_responsibility) itemBody.default_responsibility = defResp;
     if (isSpare !== line.item.is_spare) itemBody.is_spare = isSpare;
+    if (collectPrefs !== line.item.collect_prefs) itemBody.collect_prefs = collectPrefs;
     const nDefQty = defQty === "" ? null : Number(defQty);
     if (nDefQty !== line.item.default_qty) itemBody.default_qty = nDefQty;
     if (basis !== line.item.qty_basis) itemBody.qty_basis = basis;
@@ -1175,6 +1265,10 @@ function EditLineModal({
           </div>
         )}
         <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
+        <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
+          <input type="checkbox" checked={collectPrefs} onChange={(e) => setCollectPrefs(e.target.checked)} />
+          Prefs — members say how many they want before the trip (replaces the hint)
+        </label>
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
           <input type="checkbox" checked={isSpare} onChange={(e) => setIsSpare(e.target.checked)} />
           Spare — a backup item, not part of the working set

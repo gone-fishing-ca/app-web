@@ -24,6 +24,7 @@ export type ItemDraft = {
   basis: QtyBasis;
   period: QtyPeriod;
   isSpare: boolean; // a backup item, not part of the working set
+  collectPrefs: boolean; // quantity from member prefs instead of the hint
   responsibility: Responsibility;
   storageLocationId: string; // "" = nowhere in particular
   notes: string;
@@ -35,7 +36,7 @@ export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDra
   return {
     name: name.trim(), item_type: type, category: "", subcategory: "",
     unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
-    responsibility: "shared", storageLocationId: "", notes: "",
+    collectPrefs: false, responsibility: "shared", storageLocationId: "", notes: "",
   };
 }
 
@@ -50,6 +51,7 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     basis: item.qty_basis,
     period: item.qty_period,
     isSpare: item.is_spare,
+    collectPrefs: item.collect_prefs,
     responsibility: item.default_responsibility,
     storageLocationId: item.storage_location_id ?? "",
     notes: item.notes ?? "",
@@ -68,6 +70,7 @@ export function itemBodyFromDraft(d: ItemDraft) {
     qty_basis: d.basis,
     qty_period: d.period,
     is_spare: d.isSpare,
+    collect_prefs: d.collectPrefs,
     default_responsibility: d.responsibility,
     storage_location_id: d.storageLocationId || null,
     notes: d.notes.trim() || null,
@@ -117,23 +120,37 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
           </datalist>
         )}
       </div>
-      <div className="text-[12px] -mb-1" style={{ color: "var(--text-3)" }}>
-        Quantity hint — used to suggest amounts from a trip&apos;s people, cabins, and days.
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Field label="Qty" type="number" value={draft.qty} onChange={(e) => setDraft({ ...draft, qty: e.target.value })} placeholder="1" />
-        <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="oz / lbs / —" />
-        <SelectField label="Per" value={draft.basis} onChange={(v) => setDraft({ ...draft, basis: v as QtyBasis })}
-          options={[
-            ["per_person", "Person (everyone)"],
-            ["per_person_peak", "Person, peak week (handed off)"],
-            ["per_cabin", "Cabin"],
-            ["per_boat", "Boat (2 people)"],
-            ["per_group", "Group"],
-          ]} />
-        <SelectField label="Over" value={draft.period} onChange={(v) => setDraft({ ...draft, period: v as QtyPeriod })}
-          options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
-      </div>
+      {!draft.collectPrefs && (
+        <>
+          <div className="text-[12px] -mb-1" style={{ color: "var(--text-3)" }}>
+            Quantity hint — used to suggest amounts from a trip&apos;s people, cabins, and days.
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Field label="Qty" type="number" value={draft.qty} onChange={(e) => setDraft({ ...draft, qty: e.target.value })} placeholder="1" />
+            <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="oz / lbs / —" />
+            <SelectField label="Per" value={draft.basis} onChange={(v) => setDraft({ ...draft, basis: v as QtyBasis })}
+              options={[
+                ["per_person", "Person (everyone)"],
+                ["per_person_peak", "Person, peak week (handed off)"],
+                ["per_cabin", "Cabin"],
+                ["per_boat", "Boat (2 people)"],
+                ["per_group", "Group"],
+              ]} />
+            <SelectField label="Over" value={draft.period} onChange={(v) => setDraft({ ...draft, period: v as QtyPeriod })}
+              options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
+          </div>
+        </>
+      )}
+      {draft.collectPrefs && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="bottles / —" />
+        </div>
+      )}
+      <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
+        <input type="checkbox" checked={draft.collectPrefs}
+          onChange={(e) => setDraft({ ...draft, collectPrefs: e.target.checked })} />
+        Prefs — members say how many they want before the trip (replaces the hint)
+      </label>
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
         <input type="checkbox" checked={draft.isSpare}
           onChange={(e) => setDraft({ ...draft, isSpare: e.target.checked })} />
