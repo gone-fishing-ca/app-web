@@ -338,14 +338,19 @@ export type PackUnit = {
 /** An inventory item on this trip's packing list (GET /trips/{id}/pack), with
  *  trip-specific quantity/responsibility/progress layered on. `segment_id`
  *  scopes a line to one week (null = whole trip). `box_id` boxes an
- *  un-itemized line; itemized lines box per unit. */
+ *  un-itemized line; itemized lines box per unit.
+ *
+ *  `unit`/`responsibility` are the raw overrides — null means "inherit from
+ *  the master item" (cf. Stay dates). Display the `effective_*` fields. */
 export type PackLine = {
   id: string;
   trip_id: string;
   inventory_item_id: string;
   quantity: number | null;
   unit: string | null;
-  responsibility: Responsibility;
+  responsibility: Responsibility | null;
+  effective_unit: string | null;
+  effective_responsibility: Responsibility;
   assignee_participant_id: string | null;
   segment_id: string | null;
   status: PackLineStatus;

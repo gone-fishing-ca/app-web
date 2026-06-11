@@ -47,7 +47,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
     // Itemized lines speak through their unit assignments instead of the
     // generic everyone-gets-one rows.
     const personal = (lines ?? []).filter(
-      (l) => (l.responsibility === "personal" || l.responsibility === "personal_stored") && l.units.length === 0,
+      (l) => (l.effective_responsibility === "personal" || l.effective_responsibility === "personal_stored") && l.units.length === 0,
     );
     const assigned: { line: PackLine; unit: PackUnit; segmentIds: string[] }[] = [];
     for (const l of lines ?? []) {
@@ -60,7 +60,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
       bring: personal.filter((l) => participantId && effectiveSource(l, participantId) === "self"),
       stored: personal.filter((l) => participantId && effectiveSource(l, participantId) === "stored"),
       shared: (lines ?? []).filter(
-        (l) => l.responsibility === "shared" && l.assignee_participant_id === participantId,
+        (l) => l.effective_responsibility === "shared" && l.assignee_participant_id === participantId,
       ),
       assignedUnits: assigned,
     };

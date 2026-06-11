@@ -101,7 +101,7 @@ export function fmtQty(n: number): string {
 export function effectiveSource(line: PackLine, participantId: string): "self" | "stored" {
   const row = line.people.find((p) => p.participant_id === participantId);
   if (row?.source) return row.source;
-  return line.responsibility === "personal_stored" ? "stored" : "self";
+  return line.effective_responsibility === "personal_stored" ? "stored" : "self";
 }
 
 export function personRow(line: PackLine, participantId: string): PackPerson | null {
