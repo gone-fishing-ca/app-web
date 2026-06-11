@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronRight, ClipboardList, Copy, Layers, Package, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { Badge, Btn, Card, EmptyState, Field, ModalShell, SectionTitle, StatCard } from "@/components/ui";
-import { GroupHeader, useCollapsedSet } from "@/components/collapsible";
+import { GroupHeader, TypeHeader, useFoldState } from "@/components/collapsible";
 import {
   type ItemDraft,
   ItemFields,
@@ -130,7 +130,17 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     return byType;
   }, [filtered]);
 
-  const { isCollapsed, toggle } = useCollapsedSet(`gf-packing-collapsed-${tripId}`);
+  const { isOpen: foldOpen, toggle, setMany } = useFoldState(`gf-packing-fold-${tripId}`);
+
+  /** Every category/subcategory fold key inside one type's groups. */
+  function groupKeys(type: string, cats: Map<string, Map<string, PackLine[]>>): string[] {
+    const keys: string[] = [];
+    for (const [cat, subs] of cats) {
+      keys.push(`${type}|${cat}`);
+      for (const sub of subs.keys()) if (sub) keys.push(`${type}|${cat}|${sub}`);
+    }
+    return keys;
+  }
 
   function openAdd(scope: { type: InventoryType; category: string | null; subcategory: string | null } | null) {
     setAddScope(scope);
@@ -286,28 +296,12 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
             const typeCount = [...cats.values()].reduce(
               (n, subs) => n + [...subs.values()].reduce((m, g) => m + g.length, 0), 0,
             );
-            const typeOpen = !isCollapsed(type);
+            const typeOpen = foldOpen(type, true);
             return (
             <Card key={type}>
-              <button
-                onClick={() => toggle(type)}
-                className="flex w-full items-center gap-2.5 px-4 sm:px-5 py-3.5 text-left"
-                style={{ borderBottom: typeOpen ? "1px solid var(--border)" : "none" }}
-                title={typeOpen ? "Collapse" : "Expand"}
-              >
-                {typeOpen
-                  ? <ChevronDown size={16} style={{ color: "var(--text-3)" }} />
-                  : <ChevronRight size={16} style={{ color: "var(--text-3)" }} />}
-                <div style={{
-                  fontFamily: "var(--font-display)",
-                  fontWeight: "var(--display-weight)" as unknown as number,
-                  letterSpacing: "var(--display-tracking)",
-                  fontSize: 17, color: "var(--text)",
-                }}>
-                  {type}
-                </div>
-                <Badge tone="neutral">{typeCount}</Badge>
-              </button>
+              <TypeHeader label={type} count={typeCount} open={typeOpen}
+                onToggle={() => toggle(type, true)}
+                onSetAll={(open) => setMany(open ? [type, ...groupKeys(type, cats)] : groupKeys(type, cats), open)} />
 
               {typeOpen && (
               <div className="overflow-x-auto">
@@ -315,20 +309,26 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                   {[...cats.entries()].map(([cat, subs]) => {
                     const catKey = `${type}|${cat}`;
                     const catCount = [...subs.values()].reduce((m, g) => m + g.length, 0);
-                    const catOpen = !isCollapsed(catKey);
+                    const catOpen = foldOpen(catKey, false);
+                    const namedSubKeys = [...subs.keys()].filter(Boolean).map((s) => `${catKey}|${s}`);
                     return (
                     <div key={cat}>
                       <GroupHeader level={1} label={cat} count={catCount} open={catOpen}
-                        onToggle={() => toggle(catKey)}
-                        onAdd={() => openAdd({ type, category: cat === "General" ? null : cat, subcategory: null })} />
+                        onToggle={() => toggle(catKey, false)}
+                        onAdd={() => openAdd({ type, category: cat === "General" ? null : cat, subcategory: null })}
+                        onSetAll={namedSubKeys.length > 0
+                          // expanding opens the category too; collapsing keeps it
+                          // open so the folded subcategory headers stay visible
+                          ? (open) => setMany(open ? [catKey, ...namedSubKeys] : namedSubKeys, open)
+                          : undefined} />
                       {catOpen && [...subs.entries()].map(([sub, group]) => {
                         const subKey = `${catKey}|${sub}`;
-                        const subOpen = !sub || !isCollapsed(subKey);
+                        const subOpen = !sub || foldOpen(subKey, false);
                         return (
                         <div key={sub || "_"}>
                           {sub && (
                             <GroupHeader level={2} label={sub} count={group.length} open={subOpen}
-                              onToggle={() => toggle(subKey)}
+                              onToggle={() => toggle(subKey, false)}
                               onAdd={() => openAdd({ type, category: cat === "General" ? null : cat, subcategory: sub })} />
                           )}
                           {subOpen && group.map((line) => {
