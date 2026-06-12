@@ -8,6 +8,7 @@ import {
   type InventoryItem,
   type Meal,
   type MenuEntry,
+  type PackLine,
   type Segment,
   type Stay,
 } from "@/lib/api";
@@ -72,6 +73,8 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
+  // Pack lines back the editable ingredient quantities on the totals card.
+  const [packLines, setPackLines] = useState<PackLine[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,7 +82,28 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
     api.get<InventoryItem[]>(`/inventory`).then(setInventory).catch(() => {});
     api.get<Segment[]>(`/trips/${tripId}/segments`).then(setSegments).catch(() => {});
     api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
+    api.get<PackLine[]>(`/trips/${tripId}/pack`).then(setPackLines).catch(() => {});
   }, [tripId]);
+
+  /** Set an ingredient's packing quantity from here — patches its pack line,
+   *  creating the line on first entry. Clearing keeps the line (quantity
+   *  null); removing it entirely stays a Packing-page action. */
+  async function setIngredientQty(item: InventoryItem, v: number | null) {
+    try {
+      const line = packLines.find((l) => l.inventory_item_id === item.id);
+      if (line) {
+        const updated = await api.patch<PackLine>(`/trips/${tripId}/pack/${line.id}`, { quantity: v });
+        setPackLines((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+      } else if (v != null) {
+        const created = await api.post<PackLine>(`/trips/${tripId}/pack`, {
+          inventory_item_id: item.id, quantity: v,
+        });
+        setPackLines((prev) => [...prev, created]);
+      }
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+  }
 
   // The pickable items per meal: menu-flagged Food whose category matches the
   // meal name ("Breakfast" / "Dinner" categories under Food).
@@ -350,11 +374,13 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
                   On the packing list
                 </div>
                 <div className="text-[12px]" style={{ color: "var(--text-3)" }}>
-                  Menu totals — kept in sync automatically as the trip&apos;s packing quantities.
-                  Dish ingredients are listed too; size them on the Packing page.
+                  Menu totals sync automatically; dish ingredients are listed with an
+                  editable packing quantity (also editable on the Packing page).
                 </div>
               </div>
-              {totals.map(({ item, qty, uses }) => (
+              {totals.map(({ item, qty, uses }) => {
+                const line = packLines.find((l) => l.inventory_item_id === item.id);
+                return (
                 <div key={item.id} className="flex items-center gap-3 px-4 sm:px-5 py-2"
                   style={{ borderTop: "1px solid var(--border)" }}>
                   <div className="flex-1 min-w-0">
@@ -367,13 +393,34 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
                       </div>
                     )}
                   </div>
-                  <span className="text-[13px] gf-mono flex-none" style={{ color: "var(--text-2)" }}>
-                    {qty != null
-                      ? `${fmtQty(qty)}${item.default_unit ? ` ${item.default_unit}` : ""}`
-                      : ""}
-                  </span>
+                  {qty != null ? (
+                    /* a synced menu item — its quantity is computed from the menu */
+                    <span className="text-[13px] gf-mono flex-none" style={{ color: "var(--text-2)" }}>
+                      {fmtQty(qty)}{item.default_unit ? ` ${item.default_unit}` : ""}
+                    </span>
+                  ) : (
+                    /* an ingredient — quantity edits its pack line directly */
+                    <div className="flex items-baseline gap-1.5 flex-none">
+                      <input
+                        key={`${item.id}-${line?.quantity ?? "ø"}`}
+                        type="number" inputMode="decimal" min={0} step="any"
+                        defaultValue={line?.quantity == null ? "" : fmtQty(line.quantity)}
+                        placeholder="—"
+                        onBlur={(ev) => {
+                          const v = ev.target.value === "" ? null : Number(ev.target.value);
+                          if (v !== (line?.quantity ?? null)) void setIngredientQty(item, v);
+                        }}
+                        className="w-[56px] rounded-[9px] px-2 py-1 text-[13px] text-right gf-mono outline-none"
+                        style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+                      />
+                      <span className="w-[42px] truncate text-[12px]" style={{ color: "var(--text-3)" }}>
+                        {item.default_unit ?? ""}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </Card>
           )}
         </div>

@@ -274,8 +274,10 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
                   style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-3)", maxWidth: "100%" }}
                 >
                   <option value="">+ Add ingredient…</option>
+                  {/* ingredients are packable Food — not other dishes/menu items */}
                   {ingredientChoices
-                    .filter((i) => !i.archived && !i.is_menu_item && !draft.ingredientIds.includes(i.id))
+                    .filter((i) => !i.archived && i.item_type === "Food" && !i.is_menu_item
+                      && !draft.ingredientIds.includes(i.id))
                     .map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
                 </select>
               </div>
