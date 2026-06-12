@@ -40,7 +40,8 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Participants | ✅ full CRUD + edit row |
 | Master inventory (`/inventory` — reusable catalog: taxonomy, qty hints or member prefs with shared pref rules, kinded sources (storage / buyer / outfitter) with a responsible person, archive) | ✅ wired |
 | Packing (trip list from inventory: copy-from-previous-trip, add/search, suggested quantities, prefs lines summing member answers, personal-vs-shared + packed-by + belongs-to (person/cabin/group) + cost/paid-by capture, status; itemize lines into labeled units/splits with per-unit qty + cabin, per-week assignment + boxes) | ✅ wired |
-| My pack list (per-person view: your-prefs answers with rule targets / you-bring / stored-for-you / assigned group gear / yours-on-the-trip, packed checkoffs) | ✅ wired |
+| My prefs (per-person pre-trip answers: typed inputs — steppers by increment, Yes/No bools — defaults, rule targets) | ✅ wired |
+| My pack list (per-person view: you-bring / stored-for-you / assigned group gear / yours-on-the-trip, packed checkoffs) | ✅ wired |
 | Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — edited via the lake modal on the Overview week cards (no separate page) |
 | Contacts (group + relatives, outfitter edit, trip resources) | ✅ wired — address-book contacts & reusable resources |
 | Schedule (calendar + day-by-day itinerary: weeks, fly in/out, itinerary items) | ✅ wired |
@@ -67,6 +68,7 @@ app/
       participants/page.tsx  Group roster (+ add-from-address-book picker)
       contacts/page.tsx    group & relatives · outfitters · trip resources
       packing/page.tsx     trip packing list (copy-from, add/search inventory, suggestions)
+      my-prefs/page.tsx    per-person pre-trip prefs (typed answers, defaults, rule targets)
       my-list/page.tsx     per-person pack list (you-bring / stored-for-you / group gear)
       segments/page.tsx    Schedule (calendar + day-by-day itinerary list)
       flights/page.tsx     Flights (per-person legs grouped by person)
@@ -74,6 +76,7 @@ app/
 components/
   ui.tsx                 Btn · Badge · Card · Field · Wordmark · StatCard · EmptyState · …
   inventory-form.tsx     shared inventory-item editor fields (packing + inventory pages)
+  prefs-card.tsx         the My-prefs card (typed inputs, rule targets, serialized saves)
   collapsible.tsx        GroupHeader + useCollapsedSet (persisted fold state for grouped lists)
   stub.tsx               ModuleStub
 lib/

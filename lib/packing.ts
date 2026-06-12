@@ -106,8 +106,19 @@ export function unitsTotal(units: PackUnit[]): number {
   return units.reduce((sum, u) => sum + (u.quantity ?? 1), 0);
 }
 
-/** A prefs line's suggested quantity: the sum of member answers so far. */
-export function prefsTotal(line: PackLine): number {
+/** One person's effective pref on a line: their explicit answer, else the
+ *  item's default (what their input initializes to), else null. */
+export function effectivePref(line: PackLine, participantId: string): number | null {
+  const row = line.people.find((p) => p.participant_id === participantId);
+  return row?.pref_qty ?? line.item.pref_default ?? null;
+}
+
+/** A prefs line's suggested quantity. With a roster, sums each person's
+ *  effective pref (defaults count); without, sums explicit answers only. */
+export function prefsTotal(line: PackLine, participantIds?: string[]): number {
+  if (participantIds) {
+    return participantIds.reduce((sum, pid) => sum + (effectivePref(line, pid) ?? 0), 0);
+  }
   return line.people.reduce((sum, p) => sum + (p.pref_qty ?? 0), 0);
 }
 
@@ -133,10 +144,8 @@ export function prefRuleStatus(
   participantId: string,
   days: number,
 ): { target: number; picked: number; met: boolean } {
-  const picked = ruleLines.reduce(
-    (sum, l) => sum + (l.people.find((p) => p.participant_id === participantId)?.pref_qty ?? 0),
-    0,
-  );
+  // Defaults count toward the rule — the input initializes there.
+  const picked = ruleLines.reduce((sum, l) => sum + (effectivePref(l, participantId) ?? 0), 0);
   const target = rule.kind === "per_day" ? rule.qty * days : rule.qty;
   const met = rule.kind === "max" ? picked <= target : picked === target;
   return { target, picked, met };

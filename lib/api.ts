@@ -280,6 +280,7 @@ export type PackSource = "self" | "stored";
  *  row client-side at add time). */
 export type SourceKind = "storage" | "buyer" | "outfitter";
 export type PrefRuleKind = "per_day" | "total" | "max";
+export type PrefType = "int" | "float" | "bool";
 
 /** A shared quantity rule for prefs items — "2 slices of lunchmeat per day"
  *  across Ham and Turkey. per_day/total are exact per-person targets (per_day
@@ -322,6 +323,9 @@ export type InventoryItem = {
   collect_prefs: boolean; // quantity comes from member prefs, not the hint
   pref_rule_id: string | null;
   pref_rule: PrefRule | null; // embedded so members can check their answers
+  pref_type: PrefType; // bool = Yes/No stored as 1/0
+  pref_increment: number; // the +/- step (0.5 for half-cases)
+  pref_default: number | null; // answers initialize here (explicit answers override)
   is_personal: boolean; // everyone brings their own (if they want); off = shared/managed
   source_id: string | null;
   source: Source | null; // embedded for display + packer defaulting

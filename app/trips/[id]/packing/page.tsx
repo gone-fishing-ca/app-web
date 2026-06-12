@@ -373,9 +373,11 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                               onAdd={() => openAdd({ type, category: cat === "General" ? null : cat, subcategory: sub })} />
                           )}
                           {subOpen && group.map((line) => {
-                        // Prefs lines suggest the sum of member answers; everything else from the hint.
+                        // Prefs lines suggest the sum of member answers (un-answered
+                        // people count at the item's default); everything else from the hint.
+                        const prefSum = line.item.collect_prefs ? prefsTotal(line, participants.map((p) => p.id)) : 0;
                         const suggestion = line.item.collect_prefs
-                          ? (prefsAnswered(line) > 0 ? prefsTotal(line) : null)
+                          ? (prefSum > 0 || prefsAnswered(line) > 0 ? prefSum : null)
                           : suggestQty(line.item, line.segment_id ? tripFacts(participants.length, segments, stays, line.segment_id) : facts);
                         const itemized = line.units.length > 0;
                         const unitQty = unitsTotal(line.units);
@@ -660,7 +662,7 @@ function PrefsPanel({ line, participants, onSet }: {
           style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
           <span>Prefs — how many does each person want?</span>
           <span className="gf-mono">
-            {answered}/{participants.length} answered · total {fmtQty(prefsTotal(line))}
+            {answered}/{participants.length} answered · total {fmtQty(prefsTotal(line, participants.map((p) => p.id)))}
             {line.effective_unit ? ` ${line.effective_unit}` : ""}
           </span>
         </div>
@@ -674,7 +676,7 @@ function PrefsPanel({ line, participants, onSet }: {
                 <input
                   type="number" inputMode="decimal" min={0} step="any"
                   defaultValue={row?.pref_qty ?? ""}
-                  placeholder="—"
+                  placeholder={line.item.pref_default != null ? fmtQty(line.item.pref_default) : "—"}
                   onBlur={(e) => {
                     const v = e.target.value === "" ? null : Number(e.target.value);
                     if (v !== (row?.pref_qty ?? null)) onSet(p.id, v);

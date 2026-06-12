@@ -7,6 +7,7 @@ import {
   type InventoryItem,
   type InventoryType,
   type PrefRule,
+  type PrefType,
   type QtyBasis,
   type QtyPeriod,
   type Source,
@@ -27,6 +28,9 @@ export type ItemDraft = {
   isSpare: boolean; // a backup item, not part of the working set
   collectPrefs: boolean; // quantity from member prefs instead of the hint
   prefRuleId: string; // "" = no shared rule
+  prefType: PrefType; // int | float | bool (Yes/No)
+  prefIncrement: string; // text — the +/- step
+  prefDefault: string; // text — "" = no default
   isPersonal: boolean; // everyone brings their own; off = shared/managed
   sourceId: string; // "" = someone just brings it from home
   notes: string;
@@ -38,7 +42,8 @@ export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDra
   return {
     name: name.trim(), item_type: type, category: "", subcategory: "",
     unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
-    collectPrefs: false, prefRuleId: "", isPersonal: false, sourceId: "", notes: "",
+    collectPrefs: false, prefRuleId: "", prefType: "int", prefIncrement: "1",
+    prefDefault: "", isPersonal: false, sourceId: "", notes: "",
   };
 }
 
@@ -55,6 +60,9 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     isSpare: item.is_spare,
     collectPrefs: item.collect_prefs,
     prefRuleId: item.pref_rule_id ?? "",
+    prefType: item.pref_type,
+    prefIncrement: String(item.pref_increment),
+    prefDefault: item.pref_default == null ? "" : String(item.pref_default),
     isPersonal: item.is_personal,
     sourceId: item.source_id ?? "",
     notes: item.notes ?? "",
@@ -75,6 +83,9 @@ export function itemBodyFromDraft(d: ItemDraft) {
     is_spare: d.isSpare,
     collect_prefs: d.collectPrefs,
     pref_rule_id: d.collectPrefs ? d.prefRuleId || null : null,
+    pref_type: d.prefType,
+    pref_increment: d.prefIncrement === "" ? 1 : Number(d.prefIncrement),
+    pref_default: d.prefDefault === "" ? null : Number(d.prefDefault),
     is_personal: d.isPersonal,
     source_id: d.sourceId || null,
     notes: d.notes.trim() || null,
@@ -155,13 +166,27 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
         </>
       )}
       {draft.collectPrefs && (
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="bottles / —" />
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <SelectField label="Answer type" value={draft.prefType}
+              onChange={(v) => setDraft({ ...draft, prefType: v as PrefType })}
+              options={[["int", "Number"], ["float", "Decimal"], ["bool", "Yes / No"]]} />
+            {draft.prefType !== "bool" && (
+              <Field label="Step (+/−)" type="number" value={draft.prefIncrement}
+                onChange={(e) => setDraft({ ...draft, prefIncrement: e.target.value })}
+                placeholder="1" />
+            )}
+            <Field label={draft.prefType === "bool" ? "Default (1 = yes)" : "Default answer"}
+              type="number" value={draft.prefDefault}
+              onChange={(e) => setDraft({ ...draft, prefDefault: e.target.value })}
+              placeholder="—" />
+            <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="cases / —" />
+          </div>
           <SelectField label="Pref rule (shared target)" value={draft.prefRuleId}
             onChange={(v) => setDraft({ ...draft, prefRuleId: v })}
             options={[["", "No rule"],
               ...prefRules.map((r): [string, string] => [r.id, prefRuleOption(r)])]} />
-        </div>
+        </>
       )}
       {/* Personal and Prefs are mutually exclusive: prefs means the group's
           packer brings it and members only size the quantity. */}

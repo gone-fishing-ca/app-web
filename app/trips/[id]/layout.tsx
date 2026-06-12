@@ -13,6 +13,7 @@ import {
   Menu,
   Moon,
   PlaneTakeoff,
+  SlidersHorizontal,
   Sun,
   Users,
   Wallet,
@@ -31,6 +32,7 @@ const NAV: { id: string; label: string; icon: typeof Users; href: string }[] = [
   { id: "segments",    label: "Schedule",      icon: CalendarRange,   href: "/segments" },
   { id: "flights",     label: "Flights",       icon: PlaneTakeoff,    href: "/flights" },
   { id: "packing",     label: "Packing",       icon: ClipboardList,   href: "/packing" },
+  { id: "my-prefs",    label: "My prefs",      icon: SlidersHorizontal, href: "/my-prefs" },
   { id: "my-list",     label: "My pack list",  icon: Backpack,        href: "/my-list" },
   { id: "budget",      label: "Budget",        icon: Wallet,          href: "/budget" },
 ];
