@@ -75,7 +75,7 @@ app/
       budget/page.tsx      stub
 components/
   ui.tsx                 Btn · Badge · Card · Field · Wordmark · StatCard · EmptyState · …
-  inventory-form.tsx     shared inventory-item editor fields (packing + inventory pages)
+  inventory-form.tsx     shared inventory-item editor: fields + the master-item edit modal
   prefs-card.tsx         the My-prefs card (typed inputs, rule targets, serialized saves)
   collapsible.tsx        GroupHeader + useCollapsedSet (persisted fold state for grouped lists)
   stub.tsx               ModuleStub

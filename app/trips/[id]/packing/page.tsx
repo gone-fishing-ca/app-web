@@ -6,11 +6,11 @@ import { Badge, Btn, Card, EmptyState, Field, ModalShell, SectionTitle, StatCard
 import { GroupHeader, TypeHeader, useFoldState } from "@/components/collapsible";
 import {
   type ItemDraft,
+  ItemEditModal,
   ItemFields,
   SelectField,
   emptyItemDraft,
   itemBodyFromDraft,
-  prefRuleOption,
 } from "@/components/inventory-form";
 import {
   api,
@@ -25,8 +25,6 @@ import {
   type PackUnit,
   type Participant,
   type PrefRule,
-  type QtyBasis,
-  type QtyPeriod,
   type Segment,
   type Source,
   type Stay,
@@ -599,28 +597,27 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           cabins={cabins}
           sources={sources}
           prefRules={prefRules}
-          onSave={async (lineBody, itemBody) => {
-            let ok = true;
-            if (Object.keys(itemBody).length > 0) {
-              try {
-                const item = await api.patch<InventoryItem>(`/inventory/${editing.inventory_item_id}`, itemBody);
-                // Re-resolve the inherited values on every line of this item.
-                setLines((prev) => prev?.map((l) => (l.inventory_item_id === item.id ? {
-                  ...l, item,
-                  effective_unit: l.unit ?? item.default_unit,
-                  effective_personal: l.personal ?? item.is_personal,
-                } : l)) ?? null);
-                setInventory((prev) => prev.map((i) => (i.id === item.id ? item : i)));
-              } catch (e) {
-                setError(errMsg(e, "Couldn't update the inventory item (only its owner can)"));
-                ok = false;
-              }
-            }
+          onSave={async (lineBody) => {
             if (Object.keys(lineBody).length > 0) {
               const updated = await patchLine(editing, lineBody);
-              ok = ok && updated !== null;
+              if (updated === null) return;
             }
-            if (ok) setEditing(null);
+            setEditing(null);
+          }}
+          onItemSaved={(item) => {
+            // Re-resolve the inherited values on every line of this item —
+            // including the line open in the modal.
+            setLines((prev) => prev?.map((l) => (l.inventory_item_id === item.id ? {
+              ...l, item,
+              effective_unit: l.unit ?? item.default_unit,
+              effective_personal: l.personal ?? item.is_personal,
+            } : l)) ?? null);
+            setInventory((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+            setEditing((prev) => (prev && prev.inventory_item_id === item.id ? {
+              ...prev, item,
+              effective_unit: prev.unit ?? item.default_unit,
+              effective_personal: prev.personal ?? item.is_personal,
+            } : prev));
           }}
           onClose={() => setEditing(null)}
         />
@@ -1168,7 +1165,7 @@ function NewItemForm({
 
 /* ---- Edit one line (+ its master inventory item) --------------------------- */
 function EditLineModal({
-  line, segments, participants, boxes, cabins, sources, prefRules, onSave, onClose,
+  line, segments, participants, boxes, cabins, sources, prefRules, onSave, onItemSaved, onClose,
 }: {
   line: PackLine;
   segments: Segment[];
@@ -1177,10 +1174,15 @@ function EditLineModal({
   cabins: { id: string; name: string }[];
   sources: Source[];
   prefRules: PrefRule[];
-  onSave: (lineBody: Record<string, unknown>, itemBody: Record<string, unknown>) => Promise<void>;
+  onSave: (lineBody: Record<string, unknown>) => Promise<void>;
+  /** The master item was edited (via the stacked ItemEditModal) — the caller
+   *  re-resolves everything that inherits from it. */
+  onItemSaved: (item: InventoryItem) => void;
   onClose: () => void;
 }) {
-  // Trip-level fields. unit/personal are the raw overrides — "" = inherit.
+  // Trip-level fields only — the master item is edited through the shared
+  // ItemEditModal (the "Edit master inventory item" link), never inline here.
+  // unit/personal are the raw overrides — "" = inherit.
   const [qty, setQty] = useState(line.quantity == null ? "" : String(line.quantity));
   const [unit, setUnit] = useState(line.unit ?? "");
   const [personal, setPersonal] = useState(
@@ -1199,24 +1201,10 @@ function EditLineModal({
   const [cost, setCost] = useState(line.cost == null ? "" : String(line.cost));
   const [paidBy, setPaidBy] = useState(line.paid_by_participant_id ?? "");
   const [notes, setNotes] = useState(line.notes ?? "");
-  // Master item fields (saved back to the inventory catalog).
-  const [name, setName] = useState(line.item.name);
-  const [itemType, setItemType] = useState<InventoryType>(line.item.item_type);
-  const [category, setCategory] = useState(line.item.category ?? "");
-  const [subcategory, setSubcategory] = useState(line.item.subcategory ?? "");
-  const [defUnit, setDefUnit] = useState(line.item.default_unit ?? "");
-  const [isPersonal, setIsPersonal] = useState(line.item.is_personal);
-  const [isSpare, setIsSpare] = useState(line.item.is_spare);
-  const [collectPrefs, setCollectPrefs] = useState(line.item.collect_prefs);
-  const [prefRuleId, setPrefRuleId] = useState(line.item.pref_rule_id ?? "");
-  const [defQty, setDefQty] = useState(line.item.default_qty == null ? "" : String(line.item.default_qty));
-  const [basis, setBasis] = useState<QtyBasis>(line.item.qty_basis);
-  const [period, setPeriod] = useState<QtyPeriod>(line.item.qty_period);
-  const [sourceId, setSourceId] = useState(line.item.source_id ?? "");
-  const [itemNotes, setItemNotes] = useState(line.item.notes ?? "");
+  const [itemOpen, setItemOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  function diff(): { lineBody: Record<string, unknown>; itemBody: Record<string, unknown> } {
+  function diff(): Record<string, unknown> {
     const lineBody: Record<string, unknown> = {};
     const nQty = qty === "" ? null : Number(qty);
     if (nQty !== line.quantity) lineBody.quantity = nQty;
@@ -1237,34 +1225,14 @@ function EditLineModal({
     const nPaidBy = paidBy || (nCost != null ? assignee : "") || null;
     if (nPaidBy !== line.paid_by_participant_id) lineBody.paid_by_participant_id = nPaidBy;
     if ((notes || null) !== line.notes) lineBody.notes = notes || null;
-
-    const itemBody: Record<string, unknown> = {};
-    if (name.trim() && name.trim() !== line.item.name) itemBody.name = name.trim();
-    if (itemType !== line.item.item_type) itemBody.item_type = itemType;
-    if ((category.trim() || null) !== line.item.category) itemBody.category = category.trim() || null;
-    if ((subcategory.trim() || null) !== line.item.subcategory) itemBody.subcategory = subcategory.trim() || null;
-    if ((defUnit.trim() || null) !== line.item.default_unit) itemBody.default_unit = defUnit.trim() || null;
-    if (isPersonal !== line.item.is_personal) itemBody.is_personal = isPersonal;
-    if (isSpare !== line.item.is_spare) itemBody.is_spare = isSpare;
-    if (collectPrefs !== line.item.collect_prefs) itemBody.collect_prefs = collectPrefs;
-    const nRule = collectPrefs ? prefRuleId || null : null;
-    if (nRule !== line.item.pref_rule_id) itemBody.pref_rule_id = nRule;
-    const nDefQty = defQty === "" ? null : Number(defQty);
-    if (nDefQty !== line.item.default_qty) itemBody.default_qty = nDefQty;
-    // Personal pins the hint to per-person / per-trip, brought from home.
-    const nBasis = isPersonal ? "per_person" : basis;
-    const nPeriod = isPersonal ? "per_trip" : period;
-    const nSource = isPersonal ? null : sourceId || null;
-    if (nBasis !== line.item.qty_basis) itemBody.qty_basis = nBasis;
-    if (nPeriod !== line.item.qty_period) itemBody.qty_period = nPeriod;
-    if (nSource !== line.item.source_id) itemBody.source_id = nSource;
-    if ((itemNotes.trim() || null) !== line.item.notes) itemBody.notes = itemNotes.trim() || null;
-    return { lineBody, itemBody };
+    return lineBody;
   }
 
   return (
+    <>
     <ModalShell
       title={`Edit “${line.item.name}”`}
+      subtitle="How this item plays on this trip — the master item is unchanged."
       maxWidth={620}
       onClose={onClose}
       footer={
@@ -1272,8 +1240,7 @@ function EditLineModal({
           <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
           <Btn kind="accent" disabled={busy} onClick={async () => {
             setBusy(true);
-            const { lineBody, itemBody } = diff();
-            await onSave(lineBody, itemBody);
+            await onSave(diff());
             setBusy(false);
           }}>
             {busy ? "Saving…" : "Save"}
@@ -1282,83 +1249,11 @@ function EditLineModal({
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="text-[12px] font-bold uppercase" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
-          Inventory item <span className="normal-case font-normal" style={{ letterSpacing: 0 }}>— applies everywhere this item is used</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <SelectField label="Type" value={itemType} onChange={(v) => setItemType(v as InventoryType)}
-            options={INVENTORY_TYPES.map((t) => [t, t])} />
-          <Field label="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
-          <Field label="Subcategory" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Field label="Hint qty" type="number" value={defQty} onChange={(e) => setDefQty(e.target.value)} />
-          <Field label="Unit" value={defUnit} onChange={(e) => setDefUnit(e.target.value)} placeholder="oz / lbs / —" />
-          {/* Personal pins the hint to per-person / per-trip — only qty is editable. */}
-          {!isPersonal && (
-            <>
-              <SelectField label="Per" value={basis} onChange={(v) => setBasis(v as QtyBasis)}
-                options={[
-                  ["per_person", "Person (everyone)"],
-                  ["per_person_peak", "Person, peak week"],
-                  ["per_cabin", "Cabin"],
-                  ["per_boat", "Boat"],
-                  ["per_group", "Group"],
-                ]} />
-              <SelectField label="Over" value={period} onChange={(v) => setPeriod(v as QtyPeriod)}
-                options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
-            </>
-          )}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Personal items come from home by definition — no source to pick. */}
-          {!isPersonal && (
-            <SelectField label="Source — where it comes from" value={sourceId} onChange={setSourceId}
-              options={[
-                ["", sources.length > 0 ? "No source — brought from home" : "No sources yet"],
-                ...sources.map((x): [string, string] => [x.id, sourceLabel(x) ?? x.name]),
-              ]} />
-          )}
-          <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
-        </div>
-        {sources.length === 0 && !isPersonal && (
-          <div className="-mt-2 text-[12px]" style={{ color: "var(--text-3)" }}>
-            Sources (and who packs from them) are managed on the Inventory page.
-          </div>
-        )}
-        <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
-          <input type="checkbox" checked={isPersonal}
-            onChange={(e) => {
-              setIsPersonal(e.target.checked);
-              if (e.target.checked) {
-                // Personal implies per-person over the trip, brought from home.
-                setCollectPrefs(false);
-                setBasis("per_person");
-                setPeriod("per_trip");
-                setSourceId("");
-              }
-            }} />
-          Personal — everyone brings their own (if they want)
-        </label>
-        <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
-          <input type="checkbox" checked={collectPrefs}
-            onChange={(e) => { setCollectPrefs(e.target.checked); if (e.target.checked) setIsPersonal(false); }} />
-          Prefs — members say how many they want before the trip (replaces the hint)
-        </label>
-        {collectPrefs && prefRules.length > 0 && (
-          <SelectField label="Pref rule (shared target)" value={prefRuleId} onChange={setPrefRuleId}
-            options={[["", "No rule"],
-              ...prefRules.map((r): [string, string] => [r.id, prefRuleOption(r)])]} />
-        )}
-        <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
-          <input type="checkbox" checked={isSpare} onChange={(e) => setIsSpare(e.target.checked)} />
-          Spare — a backup item, not part of the working set
-        </label>
-
-        <div className="text-[12px] font-bold uppercase mt-2" style={{ letterSpacing: ".05em", color: "var(--text-3)" }}>
-          This trip <span className="normal-case font-normal" style={{ letterSpacing: 0 }}>— overrides apply to this trip only</span>
-        </div>
+        <button type="button" onClick={() => setItemOpen(true)}
+          className="self-start inline-flex items-center gap-1.5 text-[13px] font-semibold"
+          style={{ color: "var(--accent-600)" }}>
+          <Pencil size={13} /> Edit master inventory item…
+        </button>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="Quantity" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
           <SelectField label="Week" value={segmentId} onChange={setSegmentId}
@@ -1405,5 +1300,16 @@ function EditLineModal({
         <Field label="Trip notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Only for this trip" />
       </div>
     </ModalShell>
+    {/* stacked on top of the line modal — same editor as the Inventory page */}
+    {itemOpen && (
+      <ItemEditModal
+        item={line.item}
+        sources={sources}
+        prefRules={prefRules}
+        onSaved={onItemSaved}
+        onClose={() => setItemOpen(false)}
+      />
+    )}
+    </>
   );
 }

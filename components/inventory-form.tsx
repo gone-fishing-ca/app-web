@@ -1,8 +1,10 @@
 "use client";
 
-import { Field } from "@/components/ui";
+import { useState } from "react";
+import { Btn, Field, ModalShell } from "@/components/ui";
 import { sourceLabel } from "@/lib/packing";
 import {
+  api,
   INVENTORY_TYPES,
   type InventoryItem,
   type InventoryType,
@@ -241,5 +243,64 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
       <Field label="Notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
         placeholder="Bring 2 — they break" />
     </div>
+  );
+}
+
+/** THE master-item edit modal — one component so every entry point (Inventory
+ *  page, the packing modal's "Edit master inventory item" link) stays in sync.
+ *  Owns its draft and the PATCH; callers get the updated item via onSaved to
+ *  re-resolve anything that inherits from it. */
+export function ItemEditModal({ item, sources = [], prefRules = [], categoryHints = [], onManageSources, onSaved, onClose }: {
+  item: InventoryItem;
+  sources?: Source[];
+  prefRules?: PrefRule[];
+  categoryHints?: string[];
+  onManageSources?: () => void;
+  onSaved: (item: InventoryItem) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<ItemDraft>(draftFromItem(item));
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.patch<InventoryItem>(`/inventory/${item.id}`, itemBodyFromDraft(draft));
+      onSaved(updated);
+      onClose();
+    } catch (e) {
+      setError(e && typeof e === "object" && "message" in e
+        ? String((e as { message?: string }).message)
+        : "Save failed (only the item's owner can edit it)");
+    }
+    setBusy(false);
+  }
+
+  return (
+    <ModalShell
+      title={`Edit “${item.name}”`}
+      subtitle="Changes apply everywhere this item is used."
+      maxWidth={620}
+      onClose={onClose}
+      footer={
+        <>
+          <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn kind="accent" disabled={busy || !draft.name.trim()} onClick={() => void save()}>
+            {busy ? "Saving…" : "Save"}
+          </Btn>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {error && (
+          <div className="rounded-[10px] px-3 py-2 text-[13px]"
+            style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
+        )}
+        <ItemFields draft={draft} setDraft={setDraft} categoryHints={categoryHints}
+          sources={sources} prefRules={prefRules} onManageSources={onManageSources} />
+      </div>
+    </ModalShell>
   );
 }

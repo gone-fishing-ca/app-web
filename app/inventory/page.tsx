@@ -7,6 +7,7 @@ import { Archive, ArchiveRestore, ArrowLeft, Boxes, MapPin, Pencil, Plus, Search
 import { GroupHeader, TypeHeader, useFoldState } from "@/components/collapsible";
 import {
   type ItemDraft,
+  ItemEditModal,
   ItemFields,
   draftFromItem,
   emptyItemDraft,
@@ -117,18 +118,13 @@ export default function InventoryPage() {
     [items],
   );
 
+  // Edits go through the shared ItemEditModal — this only creates.
   async function save() {
     if (!editing) return;
     setError(null);
-    const body = itemBodyFromDraft(editing.draft);
     try {
-      if (editing.item) {
-        const updated = await api.patch<InventoryItem>(`/inventory/${editing.item.id}`, body);
-        setItems((prev) => prev?.map((i) => (i.id === updated.id ? updated : i)) ?? null);
-      } else {
-        const created = await api.post<InventoryItem>("/inventory", body);
-        setItems((prev) => (prev ? [...prev, created] : [created]));
-      }
+      const created = await api.post<InventoryItem>("/inventory", itemBodyFromDraft(editing.draft));
+      setItems((prev) => (prev ? [...prev, created] : [created]));
       setEditing(null);
     } catch (e) {
       setError(errMsg(e, "Save failed"));
@@ -312,23 +308,34 @@ export default function InventoryPage() {
         )}
       </main>
 
-      {editing && (
+      {editing && editing.item && (
+        <ItemEditModal
+          item={editing.item}
+          sources={sources}
+          prefRules={prefRules}
+          categoryHints={categoryHints}
+          onManageSources={() => setSrcOpen(true)}
+          onSaved={(updated) => setItems((prev) => prev?.map((i) => (i.id === updated.id ? updated : i)) ?? null)}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {editing && !editing.item && (
         <ModalShell
-          title={editing.item ? `Edit “${editing.item.name}”` : "New inventory item"}
-          subtitle={editing.item ? "Changes apply everywhere this item is used." : undefined}
+          title="New inventory item"
           maxWidth={620}
           onClose={() => setEditing(null)}
           footer={
             <>
               <Btn kind="ghost" onClick={() => setEditing(null)}>Cancel</Btn>
               <Btn kind="accent" disabled={!editing.draft.name.trim()} onClick={() => void save()}>
-                {editing.item ? "Save" : "Create"}
+                Create
               </Btn>
             </>
           }
         >
           <ItemFields draft={editing.draft} setDraft={(d) => setEditing({ ...editing, draft: d })}
-            autoFocusName={!editing.item} categoryHints={categoryHints} sources={sources}
+            autoFocusName categoryHints={categoryHints} sources={sources}
             prefRules={prefRules} onManageSources={() => setSrcOpen(true)} />
         </ModalShell>
       )}
