@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed } from "lucide-react";
+import { UtensilsCrossed, X } from "lucide-react";
 import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
 import {
   api,
@@ -23,6 +23,23 @@ const MEALS: { meal: Meal; label: string }[] = [
   { meal: "breakfast", label: "Breakfast" },
   { meal: "dinner", label: "Dinner" },
 ];
+
+// Course order within a meal: the canonical courses first, then any other
+// subcategory alphabetically. No subcategory sorts before everything and
+// renders without a header.
+const COURSE_ORDER = ["appetizers", "main", "sides", "dessert"];
+
+function courseKey(sub: string | null | undefined): { rank: number; name: string } {
+  const s = (sub ?? "").trim();
+  if (!s) return { rank: -1, name: "" };
+  const i = COURSE_ORDER.indexOf(s.toLowerCase());
+  return i >= 0 ? { rank: i, name: s } : { rank: COURSE_ORDER.length, name: s.toLowerCase() };
+}
+
+function compareCourse(a: string | null | undefined, b: string | null | undefined): number {
+  const ka = courseKey(a), kb = courseKey(b);
+  return ka.rank - kb.rank || ka.name.localeCompare(kb.name);
+}
 
 /* All date math in UTC slices of YYYY-MM-DD — no timezone drift. */
 function addDays(iso: string, n: number): string {
@@ -91,10 +108,6 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
    *  newest value queued behind it (the prefs-stepper pattern — out-of-order
    *  responses would snap the count back). */
   const saves = useRef(new Map<string, { busy: boolean; next?: number }>());
-  // Latest intended value per pick — steppers faster than a re-render must
-  // step from here, not a stale render closure.
-  const intent = useRef(new Map<string, number>());
-
   async function push(date: string, meal: Meal, itemId: string, qty: number) {
     const key = `${date}:${meal}:${itemId}`;
     const q = saves.current.get(key) ?? { busy: false };
@@ -124,31 +137,37 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
   }
 
   function setQty(date: string, meal: Meal, item: InventoryItem, qty: number) {
-    const key = `${date}:${meal}:${item.id}`;
-    intent.current.set(key, qty);
     setEntries((prev) => {
       const rest = (prev ?? []).filter((e) => !(e.date === date && e.meal === meal && e.inventory_item_id === item.id));
       if (qty <= 0) return rest;
       const existing = entryFor(date, meal, item.id);
       return [...rest, existing
         ? { ...existing, quantity: qty }
-        : { id: `tmp-${key}`, trip_id: tripId, date, meal, inventory_item_id: item.id, quantity: qty, item }];
+        : { id: `tmp-${date}:${meal}:${item.id}`, trip_id: tripId, date, meal, inventory_item_id: item.id, quantity: qty, item }];
     });
     void push(date, meal, item.id, qty);
-  }
-
-  function bump(date: string, meal: Meal, item: InventoryItem, direction: 1 | -1) {
-    const key = `${date}:${meal}:${item.id}`;
-    const current = intent.current.get(key) ?? entryFor(date, meal, item.id)?.quantity ?? 0;
-    setQty(date, meal, item, Math.max(0, current + direction));
   }
 
   function MealBlock({ date, meal, label }: { date: string; meal: Meal; label: string }) {
     const pickable = itemsFor.get(meal) ?? [];
     const picked = (entries ?? [])
       .filter((e) => e.date === date && e.meal === meal)
-      .sort((a, b) => a.item.name.localeCompare(b.item.name));
-    const remaining = pickable.filter((i) => !picked.some((e) => e.inventory_item_id === i.id));
+      .sort((a, b) =>
+        compareCourse(a.item.subcategory, b.item.subcategory)
+        || a.item.name.localeCompare(b.item.name));
+    const remaining = pickable
+      .filter((i) => !picked.some((e) => e.inventory_item_id === i.id))
+      .sort((a, b) => compareCourse(a.subcategory, b.subcategory) || a.name.localeCompare(b.name));
+    // Course headers only when some pick has a subcategory; consecutive
+    // grouping holds because `picked` is sorted by course.
+    const courses: { sub: string; entries: typeof picked }[] = [];
+    for (const e of picked) {
+      const sub = (e.item.subcategory ?? "").trim();
+      const last = courses[courses.length - 1];
+      if (last && last.sub === sub) last.entries.push(e);
+      else courses.push({ sub, entries: [e] });
+    }
+    const showHeaders = courses.some((c) => c.sub);
     return (
       <div className="min-w-0">
         <div className="text-[11px] font-bold uppercase mb-1.5"
@@ -156,41 +175,46 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
           {label}
         </div>
         <div className="flex flex-col gap-1">
-          {picked.map((e) => (
-            <div key={e.inventory_item_id} className="flex items-center gap-2">
-              <span className="flex-1 min-w-0 truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>
-                {e.item.name}
-              </span>
-              {/* − [qty] + stepper; 0 removes the pick. Typing works too. */}
-              <div className="flex items-stretch flex-none rounded-[9px] overflow-hidden"
-                style={{ border: "1px solid var(--border-strong)" }}>
-                <button onClick={() => bump(date, meal, e.item, -1)} title="Less (0 removes it)"
-                  className="grid place-items-center"
-                  style={{ width: 26, background: "var(--surface-2)", color: "var(--text-2)", borderRight: "1px solid var(--border)" }}>
-                  −
-                </button>
-                <input
-                  key={`${e.inventory_item_id}-${e.quantity}`}
-                  type="number" inputMode="decimal" min={0} step="any"
-                  defaultValue={fmtQty(e.quantity)}
-                  onBlur={(ev) => {
-                    const v = ev.target.value === "" ? 0 : Number(ev.target.value);
-                    if (v !== e.quantity) setQty(date, meal, e.item, Math.max(0, v));
-                  }}
-                  className="w-[42px] py-1 text-[13px] text-center gf-mono outline-none"
-                  style={{ background: "var(--surface)", border: "none", color: "var(--text)" }}
-                />
-                <button onClick={() => bump(date, meal, e.item, 1)} title="More"
-                  className="grid place-items-center"
-                  style={{ width: 26, background: "var(--surface-2)", color: "var(--text-2)", borderLeft: "1px solid var(--border)" }}>
-                  +
-                </button>
-              </div>
-              {/* fixed-width unit slot so steppers align down the column */}
-              <span className="w-[58px] flex-none truncate text-[12px]"
-                title={e.item.default_unit ?? undefined} style={{ color: "var(--text-3)" }}>
-                {e.item.default_unit ?? ""}
-              </span>
+          {courses.map((course) => (
+            <div key={course.sub || "_"} className="flex flex-col gap-1">
+              {/* compact course band — the prefs/pack-list header style */}
+              {showHeaders && course.sub && (
+                <div className="rounded-[6px] px-2 py-0.5" style={{ background: "var(--primary-100)" }}>
+                  <span className="block truncate text-[10.5px] font-bold uppercase"
+                    style={{ letterSpacing: ".05em", color: "var(--primary)" }}>
+                    {course.sub}
+                  </span>
+                </div>
+              )}
+              {course.entries.map((e) => (
+                <div key={e.inventory_item_id} className="flex items-center gap-2">
+                  <span className="flex-1 min-w-0 truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>
+                    {e.item.name}
+                  </span>
+                  {/* plain quantity box (float); clearing or 0 removes the pick */}
+                  <input
+                    key={`${e.inventory_item_id}-${e.quantity}`}
+                    type="number" inputMode="decimal" min={0} step="any"
+                    defaultValue={fmtQty(e.quantity)}
+                    onBlur={(ev) => {
+                      const v = ev.target.value === "" ? 0 : Number(ev.target.value);
+                      if (v !== e.quantity) setQty(date, meal, e.item, Math.max(0, v));
+                    }}
+                    className="w-[56px] flex-none rounded-[9px] px-2 py-1 text-[13px] text-right gf-mono outline-none"
+                    style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+                  />
+                  {/* fixed-width unit slot so the inputs align down the column */}
+                  <span className="w-[58px] flex-none truncate text-[12px]"
+                    title={e.item.default_unit ?? undefined} style={{ color: "var(--text-3)" }}>
+                    {e.item.default_unit ?? ""}
+                  </span>
+                  <button onClick={() => setQty(date, meal, e.item, 0)} title="Remove from this meal"
+                    className="grid place-items-center flex-none"
+                    style={{ width: 22, height: 22, borderRadius: 6, color: "var(--text-3)" }}>
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
             </div>
           ))}
           {remaining.length > 0 && (
@@ -206,7 +230,8 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
               <option value="">+ Add…</option>
               {remaining.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.name}{i.default_unit ? ` (${fmtQty(i.default_qty ?? 1)} ${i.default_unit})` : ""}
+                  {(i.subcategory ? `${i.subcategory} · ` : "")}{i.name}
+                  {i.default_unit ? ` (${fmtQty(i.default_qty ?? 1)} ${i.default_unit})` : ""}
                 </option>
               ))}
             </select>

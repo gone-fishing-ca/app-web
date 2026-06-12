@@ -83,6 +83,10 @@ function round1(n: number): number {
 export function hintLabel(item: InventoryItem): string | null {
   if (item.collect_prefs) return "Prefs — members choose amounts";
   if (item.default_qty == null) return null;
+  // Menu items: qty × unit feeds the group for one meal — basis/period don't apply.
+  if (item.is_menu_item) {
+    return `${fmtQty(item.default_qty)}${item.default_unit ? ` ${item.default_unit}` : ""}`;
+  }
   const basis = {
     per_person: "person",
     per_person_peak: "person (peak week)",
