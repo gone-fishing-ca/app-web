@@ -965,11 +965,12 @@ function AddItemsModal({
   const [catFilter, setCatFilter] = useState<string | null>(initial?.category ?? null);
   const [subFilter, setSubFilter] = useState<string | null>(initial?.subcategory ?? null);
   const [creating, setCreating] = useState<ItemDraft | null>(null);
+  const [addingAll, setAddingAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const onList = useMemo(() => new Set(lines.map((l) => l.inventory_item_id)), [lines]);
 
   const q = query.trim().toLowerCase();
-  const results = useMemo(
+  const matches = useMemo(
     () =>
       inventory
         .filter((i) => !i.archived)
@@ -984,6 +985,8 @@ function AddItemsModal({
         ),
     [inventory, typeFilter, catFilter, subFilter, q],
   );
+  // Already-added items are hidden — there's nothing to do with them here.
+  const results = useMemo(() => matches.filter((i) => !onList.has(i.id)), [matches, onList]);
 
   function startCreate() {
     setCreating({
@@ -1005,6 +1008,24 @@ function AddItemsModal({
     } catch (e) {
       setError(errMsg(e, "Couldn't add the item"));
     }
+  }
+
+  /** Adds everything currently shown (the filtered, not-yet-added set). */
+  async function addAll() {
+    setAddingAll(true);
+    for (const item of results) {
+      try {
+        const line = await api.post<PackLine>(`/trips/${tripId}/pack`, {
+          inventory_item_id: item.id,
+          assignee_participant_id: defaultPacker(item),
+        });
+        onAdded(line, item);
+      } catch (e) {
+        setError(errMsg(e, `Couldn't add “${item.name}”`));
+        break;
+      }
+    }
+    setAddingAll(false);
   }
 
   async function createAndAdd(draft: ItemDraft) {
@@ -1076,9 +1097,19 @@ function AddItemsModal({
               style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
           )}
 
+          {results.length > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-[12.5px]" style={{ color: "var(--text-3)" }}>
+                {results.length} not on the list yet
+              </span>
+              <Btn kind="subtle" size="sm" icon={Plus} disabled={addingAll} onClick={() => void addAll()}>
+                {addingAll ? "Adding…" : `Add all (${results.length})`}
+              </Btn>
+            </div>
+          )}
+
           <div className="flex flex-col">
             {results.map((item) => {
-              const added = onList.has(item.id);
               const path = [item.item_type, item.category, item.subcategory].filter(Boolean).join(" / ");
               return (
                 <div key={item.id} className="flex items-center gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -1091,17 +1122,15 @@ function AddItemsModal({
                       {path}{hintLabel(item) ? ` · ${hintLabel(item)}` : ""}
                     </div>
                   </div>
-                  {added ? (
-                    <Badge tone="success">On the list</Badge>
-                  ) : (
-                    <Btn kind="subtle" size="sm" icon={Plus} onClick={() => void add(item)}>Add</Btn>
-                  )}
+                  <Btn kind="subtle" size="sm" icon={Plus} disabled={addingAll} onClick={() => void add(item)}>Add</Btn>
                 </div>
               );
             })}
             {results.length === 0 && (
               <div className="py-6 text-center text-[13.5px]" style={{ color: "var(--text-3)" }}>
-                No inventory matches{query ? ` “${query.trim()}”` : ""} — create it below.
+                {matches.length > 0
+                  ? "Everything matching is already on the list."
+                  : <>No inventory matches{query ? ` “${query.trim()}”` : ""} — create it below.</>}
               </div>
             )}
           </div>
