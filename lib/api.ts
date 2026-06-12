@@ -327,10 +327,28 @@ export type InventoryItem = {
   pref_increment: number; // the +/- step (0.5 for half-cases)
   pref_default: number | null; // answers initialize here (explicit answers override)
   is_personal: boolean; // everyone brings their own (if they want); off = shared/managed
+  // Planned through the trip Menu page (per-day breakfast/dinner picks); the
+  // hint is qty × unit per group meal. Hidden from the packing Add-items modal.
+  is_menu_item: boolean;
   source_id: string | null;
   source: Source | null; // embedded for display + packer defaulting
   notes: string | null;
   archived: boolean;
+};
+
+/** The meals a trip menu plans (lunch is boat sandwiches — prefs territory). */
+export type Meal = "breakfast" | "dinner";
+
+/** One menu pick: this much of a menu item at one meal on one day. The item's
+ *  pack line follows the menu total server-side. */
+export type MenuEntry = {
+  id: string;
+  trip_id: string;
+  date: string; // YYYY-MM-DD
+  meal: Meal;
+  inventory_item_id: string;
+  quantity: number;
+  item: InventoryItem;
 };
 
 /** One participant's slice of a pack line. `source` overrides where their copy

@@ -34,6 +34,7 @@ export type ItemDraft = {
   prefIncrement: string; // text — the +/- step
   prefDefault: string; // text — "" = no default
   isPersonal: boolean; // everyone brings their own; off = shared/managed
+  isMenuItem: boolean; // planned per-day on the Menu page; hint = qty/unit per meal
   sourceId: string; // "" = no designated source (brought from home)
   notes: string;
 };
@@ -45,7 +46,7 @@ export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDra
     name: name.trim(), item_type: type, category: "", subcategory: "",
     unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
     collectPrefs: false, prefRuleId: "", prefType: "int", prefIncrement: "1",
-    prefDefault: "", isPersonal: false, sourceId: "", notes: "",
+    prefDefault: "", isPersonal: false, isMenuItem: false, sourceId: "", notes: "",
   };
 }
 
@@ -66,6 +67,7 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     prefIncrement: String(item.pref_increment),
     prefDefault: item.pref_default == null ? "" : String(item.pref_default),
     isPersonal: item.is_personal,
+    isMenuItem: item.is_menu_item,
     sourceId: item.source_id ?? "",
     notes: item.notes ?? "",
   };
@@ -82,8 +84,8 @@ export function itemBodyFromDraft(d: ItemDraft) {
     subcategory: d.subcategory.trim() || null,
     default_unit: d.unit.trim() || null,
     default_qty: d.qty === "" ? null : Number(d.qty),
-    qty_basis: d.isPersonal ? "per_person" : d.basis,
-    qty_period: d.isPersonal ? "per_trip" : d.period,
+    qty_basis: d.isPersonal ? "per_person" : d.isMenuItem ? "per_group" : d.basis,
+    qty_period: d.isPersonal || d.isMenuItem ? "per_trip" : d.period,
     is_spare: d.isSpare,
     collect_prefs: d.collectPrefs,
     pref_rule_id: d.collectPrefs ? d.prefRuleId || null : null,
@@ -91,6 +93,7 @@ export function itemBodyFromDraft(d: ItemDraft) {
     pref_increment: d.prefIncrement === "" ? 1 : Number(d.prefIncrement),
     pref_default: d.prefDefault === "" ? null : Number(d.prefDefault),
     is_personal: d.isPersonal,
+    is_menu_item: d.isMenuItem,
     source_id: d.isPersonal ? null : d.sourceId || null,
     notes: d.notes.trim() || null,
   };
@@ -153,13 +156,15 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
           <div className="text-[12px] -mb-1" style={{ color: "var(--text-3)" }}>
             {draft.isPersonal
               ? "Quantity hint — how many each person brings for the trip."
-              : "Quantity hint — used to suggest amounts from a trip's people, cabins, and days."}
+              : draft.isMenuItem
+                ? "Quantity hint — how much of this feeds the group for one meal."
+                : "Quantity hint — used to suggest amounts from a trip's people, cabins, and days."}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Field label="Qty" type="number" value={draft.qty} onChange={(e) => setDraft({ ...draft, qty: e.target.value })} placeholder="1" />
             <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="oz / lbs / —" />
-            {/* Personal pins the hint to per-person / per-trip — only qty is editable. */}
-            {!draft.isPersonal && (
+            {/* Personal/Menu pin the basis & period — only qty/unit are editable. */}
+            {!draft.isPersonal && !draft.isMenuItem && (
               <>
                 <SelectField label="Per" value={draft.basis} onChange={(v) => setDraft({ ...draft, basis: v as QtyBasis })}
                   options={[
@@ -199,21 +204,30 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
               ...prefRules.map((r): [string, string] => [r.id, prefRuleOption(r)])]} />
         </>
       )}
-      {/* Personal and Prefs are mutually exclusive: prefs means the group's
-          packer brings it and members only size the quantity. */}
+      {/* Personal / Prefs / Menu are mutually exclusive ways an item's
+          quantity gets decided: each person's whim, the group's answers, or
+          the day-by-day menu. */}
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
         <input type="checkbox" checked={draft.isPersonal}
           onChange={(e) => setDraft(e.target.checked
             // Personal implies per-person over the trip, brought from home — pin
             // the hint and clear the source (the controls hide while checked).
-            ? { ...draft, isPersonal: true, collectPrefs: false, basis: "per_person", period: "per_trip", sourceId: "" }
+            ? { ...draft, isPersonal: true, collectPrefs: false, isMenuItem: false, basis: "per_person", period: "per_trip", sourceId: "" }
             : { ...draft, isPersonal: false })} />
         Personal — everyone brings their own (if they want)
       </label>
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
         <input type="checkbox" checked={draft.collectPrefs}
-          onChange={(e) => setDraft({ ...draft, collectPrefs: e.target.checked, isPersonal: e.target.checked ? false : draft.isPersonal })} />
-        Prefs — members say how many they want before the trip (replaces the hint)
+          onChange={(e) => setDraft({ ...draft, collectPrefs: e.target.checked, isPersonal: e.target.checked ? false : draft.isPersonal, isMenuItem: e.target.checked ? false : draft.isMenuItem })} />
+        Prefs — group members choose how many they want
+      </label>
+      <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
+        <input type="checkbox" checked={draft.isMenuItem}
+          onChange={(e) => setDraft(e.target.checked
+            // Menu items are planned per-day; basis/period don't apply.
+            ? { ...draft, isMenuItem: true, isPersonal: false, collectPrefs: false, basis: "per_group", period: "per_trip", qty: draft.qty || "1" }
+            : { ...draft, isMenuItem: false })} />
+        Menu item — planned day-by-day on the trip Menu page
       </label>
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
         <input type="checkbox" checked={draft.isSpare}

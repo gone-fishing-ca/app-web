@@ -274,6 +274,7 @@ export default function InventoryPage() {
                         </div>
                         {item.is_personal && <Badge tone="info">Personal</Badge>}
                         {item.collect_prefs && <Badge tone="info">Prefs</Badge>}
+                        {item.is_menu_item && <Badge tone="info">Menu</Badge>}
                         <div className="flex items-center gap-1">
                           <button onClick={() => setEditing({ item, draft: draftFromItem(item) })} title="Edit"
                             className="grid place-items-center"

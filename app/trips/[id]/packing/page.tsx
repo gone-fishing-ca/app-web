@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Check, ChevronDown, ChevronRight, ClipboardList, Copy, DollarSign, Layers, Package, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { Badge, Btn, Card, EmptyState, Field, ModalShell, SectionTitle, StatCard } from "@/components/ui";
 import { GroupHeader, TypeHeader, useFoldState } from "@/components/collapsible";
@@ -415,6 +416,23 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                   : `${fmtQty(unitQty)} in ${line.units.length}`}
                                 {suggestion != null && unitQty === Math.round(suggestion) && <Check size={13} />}
                               </button>
+                            ) : line.item.is_menu_item ? (
+                              /* menu lines: quantity mirrors the menu totals — read-only here */
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="w-[64px] px-2 py-1.5 text-[13.5px] text-right gf-mono"
+                                  style={{ color: "var(--text)" }}>
+                                  {line.quantity == null ? "—" : fmtQty(line.quantity)}
+                                </span>
+                                <Link href={`/trips/${tripId}/menu`}
+                                  title="Quantity comes from the Menu — change the menu picks"
+                                  className="text-[12px] font-semibold flex-none rounded-full px-2 py-0.5"
+                                  style={{ background: "var(--accent-100)", color: "var(--accent-600)" }}>
+                                  menu
+                                </Link>
+                                <span className="text-[12px] truncate" style={{ color: "var(--text-3)" }}>
+                                  {line.effective_unit || ""}
+                                </span>
+                              </div>
                             ) : (
                             <div className="flex items-baseline gap-1.5">
                               <input
@@ -512,11 +530,14 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 style={{ width: 28, height: 28, borderRadius: 7, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
                                 <Pencil size={13} />
                               </button>
-                              <button onClick={() => void removeLine(line)} title="Remove from trip"
-                                className="grid place-items-center"
-                                style={{ width: 28, height: 28, borderRadius: 7, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
-                                <Trash2 size={13} />
-                              </button>
+                              {/* menu lines come and go with their menu picks — no hand removal */}
+                              {!line.item.is_menu_item && (
+                                <button onClick={() => void removeLine(line)} title="Remove from trip"
+                                  className="grid place-items-center"
+                                  style={{ width: 28, height: 28, borderRadius: 7, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -971,6 +992,9 @@ function AddItemsModal({
     () =>
       inventory
         .filter((i) => !i.archived)
+        // Menu items are planned day-by-day on the Menu page; their pack
+        // lines are created and sized by the menu totals, never by hand.
+        .filter((i) => !i.is_menu_item)
         .filter((i) => typeFilter === "All" || i.item_type === typeFilter)
         .filter((i) => !catFilter || i.category === catFilter)
         .filter((i) => !subFilter || i.subcategory === subFilter)
@@ -1255,7 +1279,19 @@ function EditLineModal({
           <Pencil size={13} /> Edit master inventory item…
         </button>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Field label="Quantity" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
+          {line.item.is_menu_item ? (
+            /* menu lines: quantity mirrors the menu totals — read-only */
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold" style={{ color: "var(--text-2)" }}>Quantity</span>
+              <div className="rounded-[11px] py-3 px-3 text-[14px] gf-mono"
+                title="Set by the Menu — change the menu picks instead"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+                {qty || "—"} <span className="text-[12px]" style={{ color: "var(--text-3)" }}>from Menu</span>
+              </div>
+            </div>
+          ) : (
+            <Field label="Quantity" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
+          )}
           <SelectField label="Week" value={segmentId} onChange={setSegmentId}
             options={[["", "Whole trip"], ...segments.map((s) => [s.id, s.name] as [string, string])]} />
           <Field label="Unit (override)" value={unit} onChange={(e) => setUnit(e.target.value)}
