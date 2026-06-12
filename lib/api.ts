@@ -266,8 +266,8 @@ export type FlightLookupLeg = {
 };
 
 /* ---- Inventory & packing (mirrors api/src/schemas.py) ---- */
-export type InventoryType = "Food" | "Gear" | "Tackle" | "Clothing" | "Misc";
-export const INVENTORY_TYPES: InventoryType[] = ["Food", "Gear", "Tackle", "Clothing", "Misc"];
+export type InventoryType = "Food" | "Gear" | "Clothing" | "Misc";
+export const INVENTORY_TYPES: InventoryType[] = ["Food", "Gear", "Clothing", "Misc"];
 export type QtyBasis = "per_person" | "per_person_peak" | "per_cabin" | "per_boat" | "per_group";
 export type QtyPeriod = "per_trip" | "per_day";
 export type PackLineStatus = "planned" | "purchased" | "packed";
