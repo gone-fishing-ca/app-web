@@ -246,16 +246,34 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
     );
   }
 
-  // The synced packing-list totals — one line per item across the whole menu.
+  // The packing-list totals: synced menu items with their summed quantity,
+  // plus the ingredients of any dish on the menu (a dish itself never syncs a
+  // line — its ingredients are what gets packed). An item can be both.
   const totals = useMemo(() => {
-    const byItem = new Map<string, { item: InventoryItem; qty: number }>();
+    const byItem = new Map<string, { item: InventoryItem; qty: number | null; uses: string[] }>();
+    const dishTotals = new Map<string, number>();
     for (const e of entries ?? []) {
-      const t = byItem.get(e.inventory_item_id) ?? { item: e.item, qty: 0 };
-      t.qty += e.quantity;
+      if (e.item.menu_no_pack) {
+        dishTotals.set(e.inventory_item_id, (dishTotals.get(e.inventory_item_id) ?? 0) + e.quantity);
+        continue;
+      }
+      const t = byItem.get(e.inventory_item_id) ?? { item: e.item, qty: 0, uses: [] };
+      t.qty = (t.qty ?? 0) + e.quantity;
       byItem.set(e.inventory_item_id, t);
     }
+    for (const dish of inventory) {
+      const total = dishTotals.get(dish.id);
+      if (!total || !dish.ingredient_ids?.length) continue;
+      for (const ingId of dish.ingredient_ids) {
+        const ing = inventory.find((i) => i.id === ingId);
+        if (!ing) continue;
+        const t = byItem.get(ingId) ?? { item: ing, qty: null, uses: [] };
+        t.uses.push(`${dish.name} (${fmtQty(total)})`);
+        byItem.set(ingId, t);
+      }
+    }
     return [...byItem.values()].sort((a, b) => a.item.name.localeCompare(b.item.name));
-  }, [entries]);
+  }, [entries, inventory]);
 
   const weeks = segments.filter((s) => s.start_date && s.end_date);
 
@@ -333,16 +351,26 @@ export default function MenuPage({ params }: { params: Promise<{ id: string }> }
                 </div>
                 <div className="text-[12px]" style={{ color: "var(--text-3)" }}>
                   Menu totals — kept in sync automatically as the trip&apos;s packing quantities.
+                  Dish ingredients are listed too; size them on the Packing page.
                 </div>
               </div>
-              {totals.map(({ item, qty }) => (
+              {totals.map(({ item, qty, uses }) => (
                 <div key={item.id} className="flex items-center gap-3 px-4 sm:px-5 py-2"
                   style={{ borderTop: "1px solid var(--border)" }}>
-                  <span className="flex-1 min-w-0 truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>
-                    {item.name}
-                  </span>
-                  <span className="text-[13px] gf-mono" style={{ color: "var(--text-2)" }}>
-                    {fmtQty(qty)}{item.default_unit ? ` ${item.default_unit}` : ""}
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>
+                      {item.name}
+                    </div>
+                    {uses.length > 0 && (
+                      <div className="truncate text-[12px]" style={{ color: "var(--text-3)" }}>
+                        Used for: {uses.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[13px] gf-mono flex-none" style={{ color: "var(--text-2)" }}>
+                    {qty != null
+                      ? `${fmtQty(qty)}${item.default_unit ? ` ${item.default_unit}` : ""}`
+                      : ""}
                   </span>
                 </div>
               ))}

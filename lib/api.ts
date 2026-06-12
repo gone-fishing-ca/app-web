@@ -330,6 +330,10 @@ export type InventoryItem = {
   // Planned through the trip Menu page (per-day breakfast/dinner picks); the
   // hint is qty × unit per group meal. Hidden from the packing Add-items modal.
   is_menu_item: boolean;
+  // A dish, not a packable thing ("Fried Fish"): no pack line is synced; the
+  // ingredient links carry the packing signal ("Used for: Fried Fish (3)").
+  menu_no_pack: boolean;
+  ingredient_ids: string[];
   source_id: string | null;
   source: Source | null; // embedded for display + packer defaulting
   notes: string | null;

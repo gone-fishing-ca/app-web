@@ -40,7 +40,7 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Participants | ✅ full CRUD + edit row |
 | Master inventory (`/inventory` — reusable catalog: taxonomy, qty hints or member prefs with shared pref rules, kinded sources (storage / buyer / outfitter) with a responsible person, archive) | ✅ wired |
 | Packing (trip list from inventory: copy-from-previous-trip, add/search, suggested quantities, prefs lines summing member answers, personal-vs-shared + packed-by + belongs-to (person/cabin/group) + cost/paid-by capture, status; itemize lines into labeled units/splits with per-unit qty + cabin, per-week assignment + boxes) | ✅ wired |
-| Menu (per-day breakfast/dinner picks of menu-flagged Food items; per-week attendance; totals auto-sync the packing list) | ✅ wired |
+| Menu (per-day breakfast/dinner picks of menu-flagged Food items grouped by course; per-week attendance; totals auto-sync the packing list; no-pack dishes link ingredients → "Used for" hints) | ✅ wired |
 | My prefs (per-person pre-trip answers: typed inputs — steppers by increment, Yes/No bools — defaults, rule targets) | ✅ wired |
 | My pack list (per-person view: you-bring / stored-for-you / assigned group gear / yours-on-the-trip, packed checkoffs) | ✅ wired |
 | Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — edited via the lake modal on the Overview week cards (no separate page) |

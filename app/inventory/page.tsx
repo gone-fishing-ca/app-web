@@ -315,6 +315,7 @@ export default function InventoryPage() {
           sources={sources}
           prefRules={prefRules}
           categoryHints={categoryHints}
+          ingredientChoices={items ?? []}
           onManageSources={() => setSrcOpen(true)}
           onSaved={(updated) => setItems((prev) => prev?.map((i) => (i.id === updated.id ? updated : i)) ?? null)}
           onClose={() => setEditing(null)}
@@ -337,7 +338,8 @@ export default function InventoryPage() {
         >
           <ItemFields draft={editing.draft} setDraft={(d) => setEditing({ ...editing, draft: d })}
             autoFocusName categoryHints={categoryHints} sources={sources}
-            prefRules={prefRules} onManageSources={() => setSrcOpen(true)} />
+            prefRules={prefRules} ingredientChoices={items ?? []}
+            onManageSources={() => setSrcOpen(true)} />
         </ModalShell>
       )}
 

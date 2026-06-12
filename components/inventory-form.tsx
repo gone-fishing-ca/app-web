@@ -35,6 +35,8 @@ export type ItemDraft = {
   prefDefault: string; // text — "" = no default
   isPersonal: boolean; // everyone brings their own; off = shared/managed
   isMenuItem: boolean; // planned per-day on the Menu page; hint = qty/unit per meal
+  menuNoPack: boolean; // a dish ("Fried Fish") — never synced to the pack list
+  ingredientIds: string[]; // the dish's ingredients (inventory item ids)
   sourceId: string; // "" = no designated source (brought from home)
   notes: string;
 };
@@ -46,7 +48,8 @@ export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDra
     name: name.trim(), item_type: type, category: "", subcategory: "",
     unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
     collectPrefs: false, prefRuleId: "", prefType: "int", prefIncrement: "1",
-    prefDefault: "", isPersonal: false, isMenuItem: false, sourceId: "", notes: "",
+    prefDefault: "", isPersonal: false, isMenuItem: false, menuNoPack: false,
+    ingredientIds: [], sourceId: "", notes: "",
   };
 }
 
@@ -68,6 +71,8 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     prefDefault: item.pref_default == null ? "" : String(item.pref_default),
     isPersonal: item.is_personal,
     isMenuItem: item.is_menu_item,
+    menuNoPack: item.menu_no_pack,
+    ingredientIds: item.ingredient_ids ?? [],
     sourceId: item.source_id ?? "",
     notes: item.notes ?? "",
   };
@@ -94,6 +99,8 @@ export function itemBodyFromDraft(d: ItemDraft) {
     pref_default: d.prefDefault === "" ? null : Number(d.prefDefault),
     is_personal: d.isPersonal,
     is_menu_item: d.isMenuItem,
+    menu_no_pack: d.isMenuItem && d.menuNoPack,
+    ingredient_ids: d.isMenuItem && d.menuNoPack ? d.ingredientIds : [],
     source_id: d.isPersonal ? null : d.sourceId || null,
     notes: d.notes.trim() || null,
   };
@@ -121,7 +128,7 @@ export function SelectField({ label, value, options, onChange }: {
   );
 }
 
-export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], sources = [], prefRules = [], onManageSources }: {
+export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], sources = [], prefRules = [], ingredientChoices = [], onManageSources }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   autoFocusName?: boolean;
@@ -131,6 +138,8 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
   sources?: Source[];
   /** Shared quantity rules offered to prefs items. */
   prefRules?: PrefRule[];
+  /** Inventory items offered as dish ingredients (callers exclude the item itself). */
+  ingredientChoices?: InventoryItem[];
   /** Opens the sources manager (shown as a link under the select). */
   onManageSources?: () => void;
 }) {
@@ -229,6 +238,55 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
             : { ...draft, isMenuItem: false })} />
         Menu item — planned day-by-day on the trip Menu page
       </label>
+      {draft.isMenuItem && (
+        <div className="ml-6 flex flex-col gap-2">
+          <label className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--text-2)" }}>
+            <input type="checkbox" checked={draft.menuNoPack}
+              onChange={(e) => setDraft({ ...draft, menuNoPack: e.target.checked })} />
+            Don&apos;t add to the packing list — a dish; its ingredients get packed instead
+          </label>
+          {draft.menuNoPack && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold" style={{ color: "var(--text-2)" }}>
+                Ingredients this dish needs
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {draft.ingredientIds.map((id) => {
+                  const ing = ingredientChoices.find((i) => i.id === id);
+                  return (
+                    <span key={id}
+                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12.5px] font-semibold"
+                      style={{ background: "var(--accent-100)", color: "var(--accent-600)" }}>
+                      {ing?.name ?? "…"}
+                      <button type="button" title="Remove ingredient"
+                        onClick={() => setDraft({ ...draft, ingredientIds: draft.ingredientIds.filter((x) => x !== id) })}>
+                        ✕
+                      </button>
+                    </span>
+                  );
+                })}
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) setDraft({ ...draft, ingredientIds: [...draft.ingredientIds, e.target.value] });
+                  }}
+                  className="rounded-[9px] px-2 py-1 text-[12.5px] font-semibold"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-3)", maxWidth: "100%" }}
+                >
+                  <option value="">+ Add ingredient…</option>
+                  {ingredientChoices
+                    .filter((i) => !i.archived && !i.is_menu_item && !draft.ingredientIds.includes(i.id))
+                    .map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+                </select>
+              </div>
+              <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
+                No quantities — each ingredient&apos;s pack line just shows
+                &ldquo;Used for: {draft.name.trim() || "this dish"}&rdquo;.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
         <input type="checkbox" checked={draft.isSpare}
           onChange={(e) => setDraft({ ...draft, isSpare: e.target.checked })} />
@@ -264,11 +322,12 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
  *  page, the packing modal's "Edit master inventory item" link) stays in sync.
  *  Owns its draft and the PATCH; callers get the updated item via onSaved to
  *  re-resolve anything that inherits from it. */
-export function ItemEditModal({ item, sources = [], prefRules = [], categoryHints = [], onManageSources, onSaved, onClose }: {
+export function ItemEditModal({ item, sources = [], prefRules = [], categoryHints = [], ingredientChoices = [], onManageSources, onSaved, onClose }: {
   item: InventoryItem;
   sources?: Source[];
   prefRules?: PrefRule[];
   categoryHints?: string[];
+  ingredientChoices?: InventoryItem[];
   onManageSources?: () => void;
   onSaved: (item: InventoryItem) => void;
   onClose: () => void;
@@ -313,7 +372,9 @@ export function ItemEditModal({ item, sources = [], prefRules = [], categoryHint
             style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
         )}
         <ItemFields draft={draft} setDraft={setDraft} categoryHints={categoryHints}
-          sources={sources} prefRules={prefRules} onManageSources={onManageSources} />
+          sources={sources} prefRules={prefRules}
+          ingredientChoices={ingredientChoices.filter((i) => i.id !== item.id)}
+          onManageSources={onManageSources} />
       </div>
     </ModalShell>
   );

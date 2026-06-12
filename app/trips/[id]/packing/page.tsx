@@ -23,6 +23,7 @@ import {
   type PackLine,
   type PackLineStatus,
   type PackPerson,
+  type MenuEntry,
   type PackUnit,
   type Participant,
   type PrefRule,
@@ -63,6 +64,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   const [tripLakes, setTripLakes] = useState<TripLake[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [prefRules, setPrefRules] = useState<PrefRule[]>([]);
+  const [menuEntries, setMenuEntries] = useState<MenuEntry[]>([]);
   const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
   const [addOpen, setAddOpen] = useState(false);
   // Scope for a header-launched "Add" — pre-filters the browser and prefills creation.
@@ -86,6 +88,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     api.get<Box[]>(`/trips/${tripId}/boxes`).then(setBoxes).catch(() => {});
     api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setTripLakes).catch(() => {});
     api.get<Source[]>(`/sources`).then(setSources).catch(() => {});
+    api.get<MenuEntry[]>(`/trips/${tripId}/menu`).then(setMenuEntries).catch(() => {});
     api.get<PrefRule[]>(`/pref-rules`).then(setPrefRules).catch(() => {});
     api.get<Trip[]>(`/trips`).then((ts) => setOtherTrips(ts.filter((t) => t.id !== tripId))).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,6 +112,25 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   }
 
   const facts = useMemo(() => tripFacts(participants.length, segments, stays), [participants, segments, stays]);
+
+  // Dish usage per ingredient: "Used for: Fried Fish (3)" on the oil/flour
+  // lines — the dish itself never appears on the list (menu_no_pack).
+  const usedFor = useMemo(() => {
+    const dishTotals = new Map<string, number>();
+    for (const e of menuEntries) {
+      dishTotals.set(e.inventory_item_id, (dishTotals.get(e.inventory_item_id) ?? 0) + e.quantity);
+    }
+    const byIngredient = new Map<string, string[]>();
+    for (const dish of inventory) {
+      if (!dish.ingredient_ids?.length) continue;
+      const total = dishTotals.get(dish.id);
+      if (!total) continue;
+      for (const ing of dish.ingredient_ids) {
+        byIngredient.set(ing, [...(byIngredient.get(ing) ?? []), `${dish.name} (${fmtQty(total)})`]);
+      }
+    }
+    return byIngredient;
+  }, [inventory, menuEntries]);
   const segName = useMemo(() => new Map(segments.map((s) => [s.id, s.name])), [segments]);
   const cabins = useMemo(
     () => tripLakes.flatMap((l) => l.cabins.map((c) => ({ id: c.id, name: tripLakes.length > 1 ? `${c.name} — ${l.name}` : c.name }))),
@@ -395,10 +417,14 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
                                 {line.segment_id && <Badge tone="info">{segName.get(line.segment_id) ?? "Week"}</Badge>}
                                 {owner && <Badge tone="neutral">{owner}&rsquo;s</Badge>}
                               </div>
-                              {(line.cost != null || line.notes || line.item.notes || hintLabel(line.item)) && (
+                              {(line.cost != null || line.notes || line.item.notes || hintLabel(line.item)
+                                || usedFor.has(line.inventory_item_id)) && (
                                 <div className="truncate text-[12px] mt-0.5" style={{ color: "var(--text-3)" }}>
                                   {[line.cost != null ? `$${fmtQty(line.cost)}` : null,
-                                    line.notes || line.item.notes || hintLabel(line.item)]
+                                    line.notes || line.item.notes || hintLabel(line.item),
+                                    usedFor.has(line.inventory_item_id)
+                                      ? `Used for: ${usedFor.get(line.inventory_item_id)!.join(", ")}`
+                                      : null]
                                     .filter(Boolean).join(" · ")}
                                 </div>
                               )}
@@ -618,6 +644,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           cabins={cabins}
           sources={sources}
           prefRules={prefRules}
+          inventory={inventory}
           onSave={async (lineBody) => {
             if (Object.keys(lineBody).length > 0) {
               const updated = await patchLine(editing, lineBody);
@@ -1080,7 +1107,8 @@ function AddItemsModal({
     >
       {creating ? (
         <NewItemForm draft={creating} setDraft={setCreating} error={error} sources={sources}
-          prefRules={prefRules} onCancel={() => setCreating(null)} onSubmit={() => void createAndAdd(creating)} />
+          prefRules={prefRules} inventory={inventory}
+          onCancel={() => setCreating(null)} onSubmit={() => void createAndAdd(creating)} />
       ) : (
         <div className="flex flex-col gap-3">
           <Field icon={Search} value={query} onChange={(e) => setQuery(e.target.value)}
@@ -1162,19 +1190,21 @@ function AddItemsModal({
 }
 
 function NewItemForm({
-  draft, setDraft, error, sources, prefRules, onCancel, onSubmit,
+  draft, setDraft, error, sources, prefRules, inventory, onCancel, onSubmit,
 }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   error: string | null;
   sources: Source[];
   prefRules: PrefRule[];
+  inventory: InventoryItem[];
   onCancel: () => void;
   onSubmit: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <ItemFields draft={draft} setDraft={setDraft} autoFocusName sources={sources} prefRules={prefRules} />
+      <ItemFields draft={draft} setDraft={setDraft} autoFocusName sources={sources}
+        prefRules={prefRules} ingredientChoices={inventory} />
       {error && (
         <div className="rounded-[10px] px-3 py-2 text-[13px]"
           style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
@@ -1189,7 +1219,7 @@ function NewItemForm({
 
 /* ---- Edit one line (+ its master inventory item) --------------------------- */
 function EditLineModal({
-  line, segments, participants, boxes, cabins, sources, prefRules, onSave, onItemSaved, onClose,
+  line, segments, participants, boxes, cabins, sources, prefRules, inventory, onSave, onItemSaved, onClose,
 }: {
   line: PackLine;
   segments: Segment[];
@@ -1198,6 +1228,7 @@ function EditLineModal({
   cabins: { id: string; name: string }[];
   sources: Source[];
   prefRules: PrefRule[];
+  inventory: InventoryItem[];
   onSave: (lineBody: Record<string, unknown>) => Promise<void>;
   /** The master item was edited (via the stacked ItemEditModal) — the caller
    *  re-resolves everything that inherits from it. */
@@ -1342,6 +1373,7 @@ function EditLineModal({
         item={line.item}
         sources={sources}
         prefRules={prefRules}
+        ingredientChoices={inventory}
         onSaved={onItemSaved}
         onClose={() => setItemOpen(false)}
       />
