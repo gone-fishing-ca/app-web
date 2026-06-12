@@ -32,7 +32,7 @@ export type ItemDraft = {
   prefIncrement: string; // text — the +/- step
   prefDefault: string; // text — "" = no default
   isPersonal: boolean; // everyone brings their own; off = shared/managed
-  sourceId: string; // "" = someone just brings it from home
+  sourceId: string; // "" = no designated source (brought from home)
   notes: string;
 };
 
@@ -69,7 +69,9 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
   };
 }
 
-/** The draft as an InventoryItemIn body (POST /inventory or new_item). */
+/** The draft as an InventoryItemIn body (POST /inventory or new_item).
+ *  Personal items are pinned to per-person / per-trip with no source — each
+ *  person brings their own from home. */
 export function itemBodyFromDraft(d: ItemDraft) {
   return {
     name: d.name.trim(),
@@ -78,8 +80,8 @@ export function itemBodyFromDraft(d: ItemDraft) {
     subcategory: d.subcategory.trim() || null,
     default_unit: d.unit.trim() || null,
     default_qty: d.qty === "" ? null : Number(d.qty),
-    qty_basis: d.basis,
-    qty_period: d.period,
+    qty_basis: d.isPersonal ? "per_person" : d.basis,
+    qty_period: d.isPersonal ? "per_trip" : d.period,
     is_spare: d.isSpare,
     collect_prefs: d.collectPrefs,
     pref_rule_id: d.collectPrefs ? d.prefRuleId || null : null,
@@ -87,7 +89,7 @@ export function itemBodyFromDraft(d: ItemDraft) {
     pref_increment: d.prefIncrement === "" ? 1 : Number(d.prefIncrement),
     pref_default: d.prefDefault === "" ? null : Number(d.prefDefault),
     is_personal: d.isPersonal,
-    source_id: d.sourceId || null,
+    source_id: d.isPersonal ? null : d.sourceId || null,
     notes: d.notes.trim() || null,
   };
 }
@@ -147,21 +149,28 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
       {!draft.collectPrefs && (
         <>
           <div className="text-[12px] -mb-1" style={{ color: "var(--text-3)" }}>
-            Quantity hint — used to suggest amounts from a trip&apos;s people, cabins, and days.
+            {draft.isPersonal
+              ? "Quantity hint — how many each person brings for the trip."
+              : "Quantity hint — used to suggest amounts from a trip's people, cabins, and days."}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Field label="Qty" type="number" value={draft.qty} onChange={(e) => setDraft({ ...draft, qty: e.target.value })} placeholder="1" />
             <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="oz / lbs / —" />
-            <SelectField label="Per" value={draft.basis} onChange={(v) => setDraft({ ...draft, basis: v as QtyBasis })}
-              options={[
-                ["per_person", "Person (everyone)"],
-                ["per_person_peak", "Person, peak week (handed off)"],
-                ["per_cabin", "Cabin"],
-                ["per_boat", "Boat (2 people)"],
-                ["per_group", "Group"],
-              ]} />
-            <SelectField label="Over" value={draft.period} onChange={(v) => setDraft({ ...draft, period: v as QtyPeriod })}
-              options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
+            {/* Personal pins the hint to per-person / per-trip — only qty is editable. */}
+            {!draft.isPersonal && (
+              <>
+                <SelectField label="Per" value={draft.basis} onChange={(v) => setDraft({ ...draft, basis: v as QtyBasis })}
+                  options={[
+                    ["per_person", "Person (everyone)"],
+                    ["per_person_peak", "Person, peak week (handed off)"],
+                    ["per_cabin", "Cabin"],
+                    ["per_boat", "Boat (2 people)"],
+                    ["per_group", "Group"],
+                  ]} />
+                <SelectField label="Over" value={draft.period} onChange={(v) => setDraft({ ...draft, period: v as QtyPeriod })}
+                  options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
+              </>
+            )}
           </div>
         </>
       )}
@@ -192,7 +201,11 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
           packer brings it and members only size the quantity. */}
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
         <input type="checkbox" checked={draft.isPersonal}
-          onChange={(e) => setDraft({ ...draft, isPersonal: e.target.checked, collectPrefs: e.target.checked ? false : draft.collectPrefs })} />
+          onChange={(e) => setDraft(e.target.checked
+            // Personal implies per-person over the trip, brought from home — pin
+            // the hint and clear the source (the controls hide while checked).
+            ? { ...draft, isPersonal: true, collectPrefs: false, basis: "per_person", period: "per_trip", sourceId: "" }
+            : { ...draft, isPersonal: false })} />
         Personal — everyone brings their own (if they want)
       </label>
       <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
@@ -205,23 +218,26 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
           onChange={(e) => setDraft({ ...draft, isSpare: e.target.checked })} />
         Spare — a backup item, not part of the working set
       </label>
-      <div className="flex flex-col gap-1">
-        <SelectField label="Source — where it comes from" value={draft.sourceId}
-          onChange={(v) => setDraft({ ...draft, sourceId: v })}
-          options={[
-            ["", sources.length > 0 ? "Someone just brings it" : "No sources yet"],
-            ...sources.map((s): [string, string] => [s.id, sourceLabel(s) ?? s.name]),
-          ]} />
-        <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
-          {onManageSources ? (
-            <button type="button" onClick={onManageSources} style={{ color: "var(--accent-600)", fontWeight: 600 }}>
-              Manage sources…
-            </button>
-          ) : (
-            <>Sources (and who packs from them) are managed on the Inventory page.</>
-          )}
-        </span>
-      </div>
+      {/* Personal items come from home by definition — no source to pick. */}
+      {!draft.isPersonal && (
+        <div className="flex flex-col gap-1">
+          <SelectField label="Source — where it comes from" value={draft.sourceId}
+            onChange={(v) => setDraft({ ...draft, sourceId: v })}
+            options={[
+              ["", sources.length > 0 ? "No source — brought from home" : "No sources yet"],
+              ...sources.map((s): [string, string] => [s.id, sourceLabel(s) ?? s.name]),
+            ]} />
+          <span className="text-[12px]" style={{ color: "var(--text-3)" }}>
+            {onManageSources ? (
+              <button type="button" onClick={onManageSources} style={{ color: "var(--accent-600)", fontWeight: 600 }}>
+                Manage sources…
+              </button>
+            ) : (
+              <>Sources (and who packs from them) are managed on the Inventory page.</>
+            )}
+          </span>
+        </div>
+      )}
       <Field label="Notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
         placeholder="Bring 2 — they break" />
     </div>

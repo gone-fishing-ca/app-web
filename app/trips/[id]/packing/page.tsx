@@ -1222,9 +1222,13 @@ function EditLineModal({
     if (nRule !== line.item.pref_rule_id) itemBody.pref_rule_id = nRule;
     const nDefQty = defQty === "" ? null : Number(defQty);
     if (nDefQty !== line.item.default_qty) itemBody.default_qty = nDefQty;
-    if (basis !== line.item.qty_basis) itemBody.qty_basis = basis;
-    if (period !== line.item.qty_period) itemBody.qty_period = period;
-    if ((sourceId || null) !== line.item.source_id) itemBody.source_id = sourceId || null;
+    // Personal pins the hint to per-person / per-trip, brought from home.
+    const nBasis = isPersonal ? "per_person" : basis;
+    const nPeriod = isPersonal ? "per_trip" : period;
+    const nSource = isPersonal ? null : sourceId || null;
+    if (nBasis !== line.item.qty_basis) itemBody.qty_basis = nBasis;
+    if (nPeriod !== line.item.qty_period) itemBody.qty_period = nPeriod;
+    if (nSource !== line.item.source_id) itemBody.source_id = nSource;
     if ((itemNotes.trim() || null) !== line.item.notes) itemBody.notes = itemNotes.trim() || null;
     return { lineBody, itemBody };
   }
@@ -1262,33 +1266,50 @@ function EditLineModal({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Field label="Hint qty" type="number" value={defQty} onChange={(e) => setDefQty(e.target.value)} />
           <Field label="Unit" value={defUnit} onChange={(e) => setDefUnit(e.target.value)} placeholder="oz / lbs / —" />
-          <SelectField label="Per" value={basis} onChange={(v) => setBasis(v as QtyBasis)}
-            options={[
-              ["per_person", "Person (everyone)"],
-              ["per_person_peak", "Person, peak week"],
-              ["per_cabin", "Cabin"],
-              ["per_boat", "Boat"],
-              ["per_group", "Group"],
-            ]} />
-          <SelectField label="Over" value={period} onChange={(v) => setPeriod(v as QtyPeriod)}
-            options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
+          {/* Personal pins the hint to per-person / per-trip — only qty is editable. */}
+          {!isPersonal && (
+            <>
+              <SelectField label="Per" value={basis} onChange={(v) => setBasis(v as QtyBasis)}
+                options={[
+                  ["per_person", "Person (everyone)"],
+                  ["per_person_peak", "Person, peak week"],
+                  ["per_cabin", "Cabin"],
+                  ["per_boat", "Boat"],
+                  ["per_group", "Group"],
+                ]} />
+              <SelectField label="Over" value={period} onChange={(v) => setPeriod(v as QtyPeriod)}
+                options={[["per_trip", "The trip"], ["per_day", "Each day"]]} />
+            </>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SelectField label="Source — where it comes from" value={sourceId} onChange={setSourceId}
-            options={[
-              ["", sources.length > 0 ? "Someone just brings it" : "No sources yet"],
-              ...sources.map((x): [string, string] => [x.id, sourceLabel(x) ?? x.name]),
-            ]} />
+          {/* Personal items come from home by definition — no source to pick. */}
+          {!isPersonal && (
+            <SelectField label="Source — where it comes from" value={sourceId} onChange={setSourceId}
+              options={[
+                ["", sources.length > 0 ? "No source — brought from home" : "No sources yet"],
+                ...sources.map((x): [string, string] => [x.id, sourceLabel(x) ?? x.name]),
+              ]} />
+          )}
           <Field label="Notes" value={itemNotes} onChange={(e) => setItemNotes(e.target.value)} placeholder="Bring 2 — they break" />
         </div>
-        {sources.length === 0 && (
+        {sources.length === 0 && !isPersonal && (
           <div className="-mt-2 text-[12px]" style={{ color: "var(--text-3)" }}>
             Sources (and who packs from them) are managed on the Inventory page.
           </div>
         )}
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
           <input type="checkbox" checked={isPersonal}
-            onChange={(e) => { setIsPersonal(e.target.checked); if (e.target.checked) setCollectPrefs(false); }} />
+            onChange={(e) => {
+              setIsPersonal(e.target.checked);
+              if (e.target.checked) {
+                // Personal implies per-person over the trip, brought from home.
+                setCollectPrefs(false);
+                setBasis("per_person");
+                setPeriod("per_trip");
+                setSourceId("");
+              }
+            }} />
           Personal — everyone brings their own (if they want)
         </label>
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
