@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Wordmark } from "@/components/ui";
 import { UserMenu } from "@/components/user-menu";
-import { api, type Trip } from "@/lib/api";
+import { api, type PackLine, type Participant, type Trip } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { daysUntil, fmtRange } from "@/lib/format";
 
@@ -37,7 +37,11 @@ const NAV: { id: string; label: string; icon: typeof Users; href: string }[] = [
   { id: "budget",      label: "Budget",        icon: Wallet,          href: "/budget" },
 ];
 
-function SidebarContent({ base, pathname, mode }: { base: string; pathname: string; mode: "light" | "dark" }) {
+function SidebarContent({ base, pathname, mode, prefsTodo }: {
+  base: string; pathname: string; mode: "light" | "dark";
+  /** Unanswered prefs for the signed-in user — the "My prefs" badge count. */
+  prefsTodo: number;
+}) {
   return (
     <>
       <Link href="/trips" className="px-2 pb-5 inline-flex items-center gap-2 mb-1">
@@ -65,6 +69,12 @@ function SidebarContent({ base, pathname, mode }: { base: string; pathname: stri
               }}
             >
               <n.icon size={17} strokeWidth={1.9} /> {n.label}
+              {n.id === "my-prefs" && prefsTodo > 0 && (
+                <span className="ml-auto grid place-items-center rounded-full text-[11px] font-bold"
+                  style={{ minWidth: 19, height: 19, padding: "0 5px", background: "var(--accent-100)", color: "var(--accent-600)" }}>
+                  {prefsTodo}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -88,6 +98,8 @@ export default function TripLayout({
   const [mode, setMode] = useState<"light" | "dark">("light");
   const [notFound, setNotFound] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [prefsTodo, setPrefsTodo] = useState(0);
+  const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-mode", mode);
@@ -103,6 +115,34 @@ export default function TripLayout({
       .then(setTrip)
       .catch(() => setNotFound(true));
   }, [authLoading, user, router, tripId]);
+
+  // The "My prefs" badge: how many prefs the signed-in user hasn't answered.
+  // An explicit answer (0 included) counts; an item default alone does not.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    Promise.all([
+      api.get<Participant[]>(`/trips/${tripId}/participants`),
+      api.get<PackLine[]>(`/trips/${tripId}/pack`),
+    ]).then(([parts, pack]) => {
+      // Same resolution as the My-prefs page: the linked roster row, else the
+      // first participant — the badge must count whoever that page shows.
+      const pid = parts.find((p) => p.user_id === user.id)?.id ?? parts[0]?.id ?? null;
+      setMyParticipantId(pid);
+      if (!pid) { setPrefsTodo(0); return; }
+      setPrefsTodo(pack.filter((l) => l.item.collect_prefs &&
+        (l.people.find((pp) => pp.participant_id === pid)?.pref_qty ?? null) == null).length);
+    }).catch(() => {});
+  }, [authLoading, user, tripId]);
+
+  // The prefs card broadcasts counts as answers save — keep the badge live.
+  useEffect(() => {
+    function onPrefsAnswered(e: Event) {
+      const d = (e as CustomEvent<{ participantId: string; unanswered: number }>).detail;
+      if (d && myParticipantId && d.participantId === myParticipantId) setPrefsTodo(d.unanswered);
+    }
+    window.addEventListener("gf:prefs-answered", onPrefsAnswered);
+    return () => window.removeEventListener("gf:prefs-answered", onPrefsAnswered);
+  }, [myParticipantId]);
 
   // The Overview page's edit modal broadcasts trip changes — keep the header in sync.
   useEffect(() => {
@@ -145,7 +185,7 @@ export default function TripLayout({
           padding: "20px 14px",
         }}
       >
-        <SidebarContent base={base} pathname={pathname} mode={mode} />
+        <SidebarContent base={base} pathname={pathname} mode={mode} prefsTodo={prefsTodo} />
       </aside>
 
       {/* Sidebar — slide-over drawer on mobile */}
@@ -169,7 +209,7 @@ export default function TripLayout({
             >
               <X size={17} />
             </button>
-            <SidebarContent base={base} pathname={pathname} mode={mode} />
+            <SidebarContent base={base} pathname={pathname} mode={mode} prefsTodo={prefsTodo} />
           </aside>
         </div>
       )}

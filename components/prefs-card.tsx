@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { Badge, Card } from "@/components/ui";
 import {
@@ -157,17 +157,26 @@ export function PrefsCard({ tripId, lines, setLines, participantId, segments, st
     const key = `${line.id}:${participantId}`;
     const step = (line.item.pref_increment || 1) * direction;
     // Step from the latest intent, else the effective value (explicit answer
-    // or the item's default — the value the input is showing).
+    // or the item's default — the value the input is showing). A first tap on
+    // an unset pref lands at 0 ("none for me"); stepping starts from there.
     const current = prefIntent.current.has(key)
       ? prefIntent.current.get(key)!
       : effectivePref(line, participantId);
-    const next = current == null ? Math.max(0, step) : Math.max(0, current + step);
+    const next = current == null ? 0 : Math.max(0, current + step);
     if (next !== current) setPref(line, next);
   }
 
-  if (prefs.length === 0) return null;
-
   const answered = prefs.filter((l) => (personRow(l, participantId)?.pref_qty ?? null) != null).length;
+
+  // Keep the sidebar's "prefs needing attention" badge live while answering.
+  useEffect(() => {
+    if (!participantId) return;
+    window.dispatchEvent(new CustomEvent("gf:prefs-answered", {
+      detail: { participantId, unanswered: prefs.length - answered },
+    }));
+  }, [participantId, prefs.length, answered]);
+
+  if (prefs.length === 0) return null;
 
   return (
     <Card>
@@ -221,6 +230,10 @@ export function PrefsCard({ tripId, lines, setLines, participantId, segments, st
             return (
               <div key={line.id} className="flex items-center gap-3 px-4 sm:px-5 py-2"
                 style={{ borderTop: "1px solid var(--border)" }}>
+                {/* unanswered marker — same accent as the sidebar badge; always
+                    rendered (transparent when answered) so names stay aligned */}
+                <span className="flex-none rounded-full" title={explicit ? undefined : "Needs your answer"}
+                  style={{ width: 7, height: 7, background: explicit ? "transparent" : "var(--accent-600)" }} />
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-[14px] font-semibold" style={{ color: "var(--text)" }}>
                     {line.item.name}
