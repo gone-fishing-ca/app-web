@@ -279,6 +279,20 @@ export type PackSource = "self" | "stored";
  *  by" when one of its items is added to a trip's list (resolved to a roster
  *  row client-side at add time). */
 export type SourceKind = "storage" | "buyer" | "outfitter";
+export type PrefRuleKind = "per_day" | "total" | "max";
+
+/** A shared quantity rule for prefs items — "2 slices of lunchmeat per day"
+ *  across Ham and Turkey. per_day/total are exact per-person targets (per_day
+ *  multiplies by the person's attended days); max is a cap. Owner-scoped. */
+export type PrefRule = {
+  id: string;
+  owner_id: string;
+  name: string;
+  message: string | null; // display sentence; null = use the name
+  kind: PrefRuleKind;
+  qty: number;
+  archived: boolean;
+};
 export type Source = {
   id: string;
   owner_id: string;
@@ -306,6 +320,8 @@ export type InventoryItem = {
   qty_period: QtyPeriod;
   is_spare: boolean; // a backup item, not part of the working set — badged, sorted last
   collect_prefs: boolean; // quantity comes from member prefs, not the hint
+  pref_rule_id: string | null;
+  pref_rule: PrefRule | null; // embedded so members can check their answers
   is_personal: boolean; // everyone brings their own (if they want); off = shared/managed
   source_id: string | null;
   source: Source | null; // embedded for display + packer defaulting

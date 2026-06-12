@@ -6,6 +6,7 @@ import {
   INVENTORY_TYPES,
   type InventoryItem,
   type InventoryType,
+  type PrefRule,
   type QtyBasis,
   type QtyPeriod,
   type Source,
@@ -25,6 +26,7 @@ export type ItemDraft = {
   period: QtyPeriod;
   isSpare: boolean; // a backup item, not part of the working set
   collectPrefs: boolean; // quantity from member prefs instead of the hint
+  prefRuleId: string; // "" = no shared rule
   isPersonal: boolean; // everyone brings their own; off = shared/managed
   sourceId: string; // "" = someone just brings it from home
   notes: string;
@@ -36,7 +38,7 @@ export function emptyItemDraft(name = "", type: InventoryType = "Gear"): ItemDra
   return {
     name: name.trim(), item_type: type, category: "", subcategory: "",
     unit: "", qty: "1", basis: "per_group", period: "per_trip", isSpare: false,
-    collectPrefs: false, isPersonal: false, sourceId: "", notes: "",
+    collectPrefs: false, prefRuleId: "", isPersonal: false, sourceId: "", notes: "",
   };
 }
 
@@ -52,6 +54,7 @@ export function draftFromItem(item: InventoryItem): ItemDraft {
     period: item.qty_period,
     isSpare: item.is_spare,
     collectPrefs: item.collect_prefs,
+    prefRuleId: item.pref_rule_id ?? "",
     isPersonal: item.is_personal,
     sourceId: item.source_id ?? "",
     notes: item.notes ?? "",
@@ -71,10 +74,18 @@ export function itemBodyFromDraft(d: ItemDraft) {
     qty_period: d.period,
     is_spare: d.isSpare,
     collect_prefs: d.collectPrefs,
+    pref_rule_id: d.collectPrefs ? d.prefRuleId || null : null,
     is_personal: d.isPersonal,
     source_id: d.sourceId || null,
     notes: d.notes.trim() || null,
   };
+}
+
+/** "Lunchmeat — 2/day" — how a rule reads in the pickers. */
+export function prefRuleOption(r: PrefRule): string {
+  const qty = Number.isInteger(r.qty) ? String(r.qty) : r.qty.toFixed(1);
+  const suffix = r.kind === "per_day" ? `${qty}/day` : r.kind === "max" ? `max ${qty}` : `${qty} total`;
+  return `${r.name} — ${suffix}`;
 }
 
 export function SelectField({ label, value, options, onChange }: {
@@ -92,7 +103,7 @@ export function SelectField({ label, value, options, onChange }: {
   );
 }
 
-export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], sources = [], onManageSources }: {
+export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [], sources = [], prefRules = [], onManageSources }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   autoFocusName?: boolean;
@@ -100,6 +111,8 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
   categoryHints?: string[];
   /** Sources (storage / buyer / outfitter) for the "Source" select. */
   sources?: Source[];
+  /** Shared quantity rules offered to prefs items. */
+  prefRules?: PrefRule[];
   /** Opens the sources manager (shown as a link under the select). */
   onManageSources?: () => void;
 }) {
@@ -144,6 +157,10 @@ export function ItemFields({ draft, setDraft, autoFocusName, categoryHints = [],
       {draft.collectPrefs && (
         <div className="grid grid-cols-2 gap-3">
           <Field label="Unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="bottles / —" />
+          <SelectField label="Pref rule (shared target)" value={draft.prefRuleId}
+            onChange={(v) => setDraft({ ...draft, prefRuleId: v })}
+            options={[["", "No rule"],
+              ...prefRules.map((r): [string, string] => [r.id, prefRuleOption(r)])]} />
         </div>
       )}
       {/* Personal and Prefs are mutually exclusive: prefs means the group's

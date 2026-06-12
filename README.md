@@ -38,9 +38,9 @@ seeded `organizer@gonefishing.app` credentials only work when the API is in
 | Trip list + create / clone | ✅ fully functional |
 | Dashboard (countdown, KPIs, crew, pack-list summary) | ✅ fully functional |
 | Participants | ✅ full CRUD + edit row |
-| Master inventory (`/inventory` — reusable catalog: taxonomy, qty hints or member prefs, kinded sources (storage / buyer / outfitter) with a responsible person, archive) | ✅ wired |
+| Master inventory (`/inventory` — reusable catalog: taxonomy, qty hints or member prefs with shared pref rules, kinded sources (storage / buyer / outfitter) with a responsible person, archive) | ✅ wired |
 | Packing (trip list from inventory: copy-from-previous-trip, add/search, suggested quantities, prefs lines summing member answers, personal-vs-shared + packed-by + belongs-to (person/cabin/group) + cost/paid-by capture, status; itemize lines into labeled units/splits with per-unit qty + cabin, per-week assignment + boxes) | ✅ wired |
-| My pack list (per-person view: your-prefs answers / you-bring / stored-for-you / assigned group gear / yours-on-the-trip, packed checkoffs) | ✅ wired |
+| My pack list (per-person view: your-prefs answers with rule targets / you-bring / stored-for-you / assigned group gear / yours-on-the-trip, packed checkoffs) | ✅ wired |
 | Lakes & cabins (reusable catalog + outfitters, linked per-trip) | ✅ wired — edited via the lake modal on the Overview week cards (no separate page) |
 | Contacts (group + relatives, outfitter edit, trip resources) | ✅ wired — address-book contacts & reusable resources |
 | Schedule (calendar + day-by-day itinerary: weeks, fly in/out, itinerary items) | ✅ wired |

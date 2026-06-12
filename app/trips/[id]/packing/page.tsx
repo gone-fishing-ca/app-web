@@ -10,6 +10,7 @@ import {
   SelectField,
   emptyItemDraft,
   itemBodyFromDraft,
+  prefRuleOption,
 } from "@/components/inventory-form";
 import {
   api,
@@ -23,6 +24,7 @@ import {
   type PackPerson,
   type PackUnit,
   type Participant,
+  type PrefRule,
   type QtyBasis,
   type QtyPeriod,
   type Segment,
@@ -61,6 +63,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [tripLakes, setTripLakes] = useState<TripLake[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
+  const [prefRules, setPrefRules] = useState<PrefRule[]>([]);
   const [typeFilter, setTypeFilter] = useState<"All" | InventoryType>("All");
   const [addOpen, setAddOpen] = useState(false);
   // Scope for a header-launched "Add" — pre-filters the browser and prefills creation.
@@ -84,6 +87,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
     api.get<Box[]>(`/trips/${tripId}/boxes`).then(setBoxes).catch(() => {});
     api.get<TripLake[]>(`/trips/${tripId}/lakes`).then(setTripLakes).catch(() => {});
     api.get<Source[]>(`/sources`).then(setSources).catch(() => {});
+    api.get<PrefRule[]>(`/pref-rules`).then(setPrefRules).catch(() => {});
     api.get<Trip[]>(`/trips`).then((ts) => setOtherTrips(ts.filter((t) => t.id !== tripId))).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
@@ -564,6 +568,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           lines={lines ?? []}
           initial={addScope}
           sources={sources}
+          prefRules={prefRules}
           defaultPacker={defaultPacker}
           onAdded={(line, item) => {
             setLines((prev) => (prev ? [...prev, line] : [line]));
@@ -591,6 +596,7 @@ export default function PackingPage({ params }: { params: Promise<{ id: string }
           boxes={boxes}
           cabins={cabins}
           sources={sources}
+          prefRules={prefRules}
           onSave={async (lineBody, itemBody) => {
             let ok = true;
             if (Object.keys(itemBody).length > 0) {
@@ -937,7 +943,7 @@ function BoxesModal({
 
 /* ---- Add items: search the master inventory, Instacart-style --------------- */
 function AddItemsModal({
-  tripId, inventory, lines, initial, sources, defaultPacker, onAdded, onClose,
+  tripId, inventory, lines, initial, sources, prefRules, defaultPacker, onAdded, onClose,
 }: {
   tripId: string;
   inventory: InventoryItem[];
@@ -945,6 +951,7 @@ function AddItemsModal({
   /** Header-launched adds arrive pre-scoped to a category/subcategory. */
   initial: { type: InventoryType; category: string | null; subcategory: string | null } | null;
   sources: Source[];
+  prefRules: PrefRule[];
   /** Resolves an item's source-responsible contact to a roster row — the
    *  materialized "Packed by" default for new lines. */
   defaultPacker: (item: InventoryItem) => string | null;
@@ -1029,7 +1036,7 @@ function AddItemsModal({
     >
       {creating ? (
         <NewItemForm draft={creating} setDraft={setCreating} error={error} sources={sources}
-          onCancel={() => setCreating(null)} onSubmit={() => void createAndAdd(creating)} />
+          prefRules={prefRules} onCancel={() => setCreating(null)} onSubmit={() => void createAndAdd(creating)} />
       ) : (
         <div className="flex flex-col gap-3">
           <Field icon={Search} value={query} onChange={(e) => setQuery(e.target.value)}
@@ -1103,18 +1110,19 @@ function AddItemsModal({
 }
 
 function NewItemForm({
-  draft, setDraft, error, sources, onCancel, onSubmit,
+  draft, setDraft, error, sources, prefRules, onCancel, onSubmit,
 }: {
   draft: ItemDraft;
   setDraft: (d: ItemDraft) => void;
   error: string | null;
   sources: Source[];
+  prefRules: PrefRule[];
   onCancel: () => void;
   onSubmit: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <ItemFields draft={draft} setDraft={setDraft} autoFocusName sources={sources} />
+      <ItemFields draft={draft} setDraft={setDraft} autoFocusName sources={sources} prefRules={prefRules} />
       {error && (
         <div className="rounded-[10px] px-3 py-2 text-[13px]"
           style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
@@ -1129,7 +1137,7 @@ function NewItemForm({
 
 /* ---- Edit one line (+ its master inventory item) --------------------------- */
 function EditLineModal({
-  line, segments, participants, boxes, cabins, sources, onSave, onClose,
+  line, segments, participants, boxes, cabins, sources, prefRules, onSave, onClose,
 }: {
   line: PackLine;
   segments: Segment[];
@@ -1137,6 +1145,7 @@ function EditLineModal({
   boxes: Box[];
   cabins: { id: string; name: string }[];
   sources: Source[];
+  prefRules: PrefRule[];
   onSave: (lineBody: Record<string, unknown>, itemBody: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
 }) {
@@ -1168,6 +1177,7 @@ function EditLineModal({
   const [isPersonal, setIsPersonal] = useState(line.item.is_personal);
   const [isSpare, setIsSpare] = useState(line.item.is_spare);
   const [collectPrefs, setCollectPrefs] = useState(line.item.collect_prefs);
+  const [prefRuleId, setPrefRuleId] = useState(line.item.pref_rule_id ?? "");
   const [defQty, setDefQty] = useState(line.item.default_qty == null ? "" : String(line.item.default_qty));
   const [basis, setBasis] = useState<QtyBasis>(line.item.qty_basis);
   const [period, setPeriod] = useState<QtyPeriod>(line.item.qty_period);
@@ -1206,6 +1216,8 @@ function EditLineModal({
     if (isPersonal !== line.item.is_personal) itemBody.is_personal = isPersonal;
     if (isSpare !== line.item.is_spare) itemBody.is_spare = isSpare;
     if (collectPrefs !== line.item.collect_prefs) itemBody.collect_prefs = collectPrefs;
+    const nRule = collectPrefs ? prefRuleId || null : null;
+    if (nRule !== line.item.pref_rule_id) itemBody.pref_rule_id = nRule;
     const nDefQty = defQty === "" ? null : Number(defQty);
     if (nDefQty !== line.item.default_qty) itemBody.default_qty = nDefQty;
     if (basis !== line.item.qty_basis) itemBody.qty_basis = basis;
@@ -1282,6 +1294,11 @@ function EditLineModal({
             onChange={(e) => { setCollectPrefs(e.target.checked); if (e.target.checked) setIsPersonal(false); }} />
           Prefs — members say how many they want before the trip (replaces the hint)
         </label>
+        {collectPrefs && prefRules.length > 0 && (
+          <SelectField label="Pref rule (shared target)" value={prefRuleId} onChange={setPrefRuleId}
+            options={[["", "No rule"],
+              ...prefRules.map((r): [string, string] => [r.id, prefRuleOption(r)])]} />
+        )}
         <label className="inline-flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
           <input type="checkbox" checked={isSpare} onChange={(e) => setIsSpare(e.target.checked)} />
           Spare — a backup item, not part of the working set

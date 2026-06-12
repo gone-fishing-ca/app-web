@@ -1,4 +1,4 @@
-import type { InventoryItem, PackLine, PackPerson, PackUnit, Segment, Source, Stay } from "./api";
+import type { InventoryItem, PackLine, PackPerson, PackUnit, PrefRule, Segment, Source, Stay } from "./api";
 
 /** The trip facts a quantity hint scales by. Derived client-side from data the
  *  packing pages already fetch — nothing is stored. A "boat" is just 2 people. */
@@ -109,6 +109,37 @@ export function unitsTotal(units: PackUnit[]): number {
 /** A prefs line's suggested quantity: the sum of member answers so far. */
 export function prefsTotal(line: PackLine): number {
   return line.people.reduce((sum, p) => sum + (p.pref_qty ?? 0), 0);
+}
+
+/** How many days one participant attends — the sum of their stays' effective
+ *  spans (the per-day pref-rule multiplier). Falls back to the trip's days
+ *  when they have no stays yet. */
+export function attendedDays(participantId: string, segments: Segment[], stays: Stay[]): number {
+  let days = 0;
+  for (const s of stays.filter((x) => x.participant_id === participantId)) {
+    if (!s.effective_start_date || !s.effective_end_date) continue;
+    const ms = new Date(s.effective_end_date).getTime() - new Date(s.effective_start_date).getTime();
+    days += Math.max(0, Math.round(ms / 86_400_000));
+  }
+  if (days === 0) days = segments.reduce((n, seg) => n + daysOf(seg), 0);
+  return days;
+}
+
+/** One participant's standing against a pref rule, across the prefs lines that
+ *  share it. per_day/total are exact targets; max is a cap. */
+export function prefRuleStatus(
+  rule: PrefRule,
+  ruleLines: PackLine[],
+  participantId: string,
+  days: number,
+): { target: number; picked: number; met: boolean } {
+  const picked = ruleLines.reduce(
+    (sum, l) => sum + (l.people.find((p) => p.participant_id === participantId)?.pref_qty ?? 0),
+    0,
+  );
+  const target = rule.kind === "per_day" ? rule.qty * days : rule.qty;
+  const met = rule.kind === "max" ? picked <= target : picked === target;
+  return { target, picked, met };
 }
 
 /** How many people have answered a prefs line (0 counts as an answer). */

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ArrowLeft, Boxes, MapPin, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Boxes, MapPin, Pencil, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { GroupHeader, TypeHeader, useFoldState } from "@/components/collapsible";
 import {
   type ItemDraft,
@@ -20,6 +20,8 @@ import {
   type Contact,
   type InventoryItem,
   type InventoryType,
+  type PrefRule,
+  type PrefRuleKind,
   type Source,
   type SourceKind,
 } from "@/lib/api";
@@ -41,8 +43,10 @@ export default function InventoryPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<{ item: InventoryItem | null; draft: ItemDraft } | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
+  const [prefRules, setPrefRules] = useState<PrefRule[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [srcOpen, setSrcOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +56,7 @@ export default function InventoryPage() {
       .then(setItems)
       .catch((e) => setError(errMsg(e, "Failed to load inventory")));
     api.get<Source[]>("/sources").then(setSources).catch(() => {});
+    api.get<PrefRule[]>("/pref-rules").then(setPrefRules).catch(() => {});
     api.get<Contact[]>("/contacts").then(setContacts).catch(() => {});
   }, [authLoading, user, router]);
 
@@ -170,6 +175,9 @@ export default function InventoryPage() {
           <div className="flex flex-wrap gap-2">
             <Btn kind="ghost" icon={MapPin} onClick={() => setSrcOpen(true)}>
               Sources{sources.length > 0 ? ` (${sources.length})` : ""}
+            </Btn>
+            <Btn kind="ghost" icon={SlidersHorizontal} onClick={() => setRulesOpen(true)}>
+              Pref rules{prefRules.length > 0 ? ` (${prefRules.length})` : ""}
             </Btn>
             <Btn kind="accent" icon={Plus} onClick={() => setEditing({ item: null, draft: emptyItemDraft("", typeFilter === "All" ? "Gear" : typeFilter) })}>
               New item
@@ -321,8 +329,20 @@ export default function InventoryPage() {
         >
           <ItemFields draft={editing.draft} setDraft={(d) => setEditing({ ...editing, draft: d })}
             autoFocusName={!editing.item} categoryHints={categoryHints} sources={sources}
-            onManageSources={() => setSrcOpen(true)} />
+            prefRules={prefRules} onManageSources={() => setSrcOpen(true)} />
         </ModalShell>
+      )}
+
+      {rulesOpen && (
+        <PrefRulesModal
+          rules={prefRules}
+          setRules={setPrefRules}
+          onChanged={() => {
+            // Items embed their rule — refresh so renames show up.
+            api.get<InventoryItem[]>("/inventory?include_archived=true").then(setItems).catch(() => {});
+          }}
+          onClose={() => setRulesOpen(false)}
+        />
       )}
 
       {srcOpen && (
@@ -469,6 +489,157 @@ function SourcesModal({
             ))}
           </select>
           <Btn kind="subtle" icon={Plus} onClick={() => void addSource()}>Add</Btn>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---- Pref rules: shared quantity targets across prefs items ----------------- */
+const RULE_KIND_LABEL: Record<PrefRuleKind, string> = {
+  per_day: "Per day",
+  total: "Total",
+  max: "Max",
+};
+
+function PrefRulesModal({
+  rules, setRules, onChanged, onClose,
+}: {
+  rules: PrefRule[];
+  setRules: (fn: (prev: PrefRule[]) => PrefRule[]) => void;
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<PrefRuleKind>("per_day");
+  const [qty, setQty] = useState("1");
+
+  async function addRule() {
+    const n = name.trim();
+    if (!n) return;
+    try {
+      const created = await api.post<PrefRule>("/pref-rules", {
+        name: n, kind, qty: qty === "" ? 1 : Number(qty),
+      });
+      setRules((prev) => [...prev, created]);
+      setName("");
+    } catch (e) {
+      setError(errMsg(e, "Couldn't add the rule"));
+    }
+  }
+
+  async function patchRule(rule: PrefRule, body: Record<string, unknown>) {
+    try {
+      const updated = await api.patch<PrefRule>(`/pref-rules/${rule.id}`, body);
+      setRules((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      onChanged();
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+  }
+
+  async function deleteRule(rule: PrefRule) {
+    if (!confirm(`Delete “${rule.name}”? This only works while no items use it.`)) return;
+    try {
+      await api.del(`/pref-rules/${rule.id}`);
+      setRules((prev) => prev.filter((r) => r.id !== rule.id));
+    } catch (e) {
+      setError(errMsg(e, "Delete failed — items use this rule"));
+    }
+  }
+
+  return (
+    <ModalShell
+      title="Pref rules"
+      subtitle="Shared targets across prefs items — “2 slices of lunchmeat per day” across Ham and Turkey. Per day multiplies by each person's attended days; Max is a cap. The message shows on everyone's prefs list."
+      maxWidth={680}
+      onClose={onClose}
+    >
+      {error && (
+        <div className="mb-3 rounded-[10px] px-3 py-2 text-[13px]"
+          style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{error}</div>
+      )}
+      <div className="flex flex-col gap-3">
+        {rules.map((rule) => (
+          <div key={rule.id} className="flex flex-col gap-1.5 rounded-[11px] p-2.5"
+            style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <input
+                defaultValue={rule.name}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v && v !== rule.name) void patchRule(rule, { name: v });
+                }}
+                className="flex-1 min-w-0 rounded-[9px] px-2.5 py-2 text-[13.5px] font-semibold outline-none"
+                style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+              />
+              <select
+                value={rule.kind}
+                onChange={(e) => void patchRule(rule, { kind: e.target.value })}
+                className="rounded-[9px] px-2 py-2 text-[13px] w-[100px]"
+                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                {(Object.keys(RULE_KIND_LABEL) as PrefRuleKind[]).map((k) => (
+                  <option key={k} value={k}>{RULE_KIND_LABEL[k]}</option>
+                ))}
+              </select>
+              <input
+                type="number" inputMode="decimal" min={0} step="any"
+                defaultValue={rule.qty}
+                onBlur={(e) => {
+                  const v = e.target.value === "" ? null : Number(e.target.value);
+                  if (v != null && v !== rule.qty) void patchRule(rule, { qty: v });
+                }}
+                className="w-[64px] flex-none rounded-[9px] px-2 py-2 text-[13px] text-right gf-mono outline-none"
+                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+              />
+              <button onClick={() => void deleteRule(rule)} title="Delete rule"
+                className="grid place-items-center flex-none"
+                style={{ width: 30, height: 30, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+            <input
+              defaultValue={rule.message ?? ""}
+              placeholder="Message shown on prefs lists — “Select two slices of lunchmeat per day”"
+              onBlur={(e) => {
+                const v = e.target.value.trim() || null;
+                if (v !== rule.message) void patchRule(rule, { message: v });
+              }}
+              className="rounded-[9px] px-2.5 py-1.5 text-[13px] outline-none"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+            />
+          </div>
+        ))}
+        {rules.length === 0 && (
+          <div className="py-4 text-center text-[13.5px]" style={{ color: "var(--text-3)" }}>
+            No rules yet — “Lunchmeat, 2 per day”, “Tortillas, 1 per day”…
+          </div>
+        )}
+        <div className="flex items-center gap-2 mt-1">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void addRule(); }}
+            placeholder="New rule — Lunchmeat…"
+            className="flex-1 min-w-0 rounded-[9px] px-2.5 py-2 text-[13.5px] outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+          />
+          <select value={kind} onChange={(e) => setKind(e.target.value as PrefRuleKind)}
+            className="rounded-[9px] px-2 py-2 text-[13px]"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
+            {(Object.keys(RULE_KIND_LABEL) as PrefRuleKind[]).map((k) => (
+              <option key={k} value={k}>{RULE_KIND_LABEL[k]}</option>
+            ))}
+          </select>
+          <input
+            type="number" inputMode="decimal" min={0} step="any"
+            value={qty} onChange={(e) => setQty(e.target.value)}
+            className="w-[64px] flex-none rounded-[9px] px-2 py-2 text-[13px] text-right gf-mono outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--text)" }}
+          />
+          <Btn kind="subtle" icon={Plus} onClick={() => void addRule()}>Add</Btn>
         </div>
       </div>
     </ModalShell>

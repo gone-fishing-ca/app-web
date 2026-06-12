@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { Backpack, Home, Luggage, SlidersHorizontal, Tag } from "lucide-react";
 import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
 import {
@@ -9,10 +9,12 @@ import {
   type PackPerson,
   type PackUnit,
   type Participant,
+  type PrefRule,
   type Segment,
+  type Stay,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { effectiveSource, hintLabel, personRow } from "@/lib/packing";
+import { attendedDays, effectiveSource, fmtQty, hintLabel, personRow, prefRuleStatus } from "@/lib/packing";
 
 function errMsg(e: unknown, fallback: string): string {
   return e && typeof e === "object" && "message" in e
@@ -26,6 +28,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
   const [lines, setLines] = useState<PackLine[] | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [stays, setStays] = useState<Stay[]>([]);
   const [selected, setSelected] = useState<string | "">("");
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +36,7 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
     api.get<PackLine[]>(`/trips/${tripId}/pack`).then(setLines).catch((e) => setError(errMsg(e, "Load failed")));
     api.get<Participant[]>(`/trips/${tripId}/participants`).then(setParticipants).catch(() => {});
     api.get<Segment[]>(`/trips/${tripId}/segments`).then(setSegments).catch(() => {});
+    api.get<Stay[]>(`/trips/${tripId}/stays`).then(setStays).catch(() => {});
   }, [tripId]);
 
   // Default to the signed-in user's roster row; organizers can view anyone's.
@@ -75,6 +79,25 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
 
   const segName = useMemo(() => new Map(segments.map((s) => [s.id, s.name])), [segments]);
 
+  // Rule check: each pref rule covering this trip's prefs lines, with the
+  // selected person's standing (per_day targets scale by their attended days).
+  const ruleStatuses = useMemo(() => {
+    if (!participantId) return [];
+    const days = attendedDays(participantId, segments, stays);
+    const byRule = new Map<string, { rule: PrefRule; lines: PackLine[] }>();
+    for (const l of prefs) {
+      const rule = l.item.pref_rule;
+      if (!rule) continue;
+      const entry = byRule.get(rule.id) ?? { rule, lines: [] };
+      entry.lines.push(l);
+      byRule.set(rule.id, entry);
+    }
+    return [...byRule.values()].map(({ rule, lines: ruleLines }) => ({
+      rule,
+      ...prefRuleStatus(rule, ruleLines, participantId, days),
+    }));
+  }, [prefs, participantId, segments, stays]);
+
   // Prefs grouped under thin "Type — Category — Subcategory" headers. Lines
   // arrive server-ordered by that taxonomy, so consecutive grouping holds.
   const prefGroups = useMemo(() => {
@@ -113,9 +136,50 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
   }
 
   /** Set a pref optimistically, so rapid +/- taps step from the latest value
-   *  instead of racing the server round trip. */
+   *  instead of racing the server round trip. Saves are serialized per
+   *  (line, person): one request in flight, only the *newest* value queued
+   *  behind it, and only the final response merged back — otherwise a slow
+   *  early response lands after a later tap and snaps the count backwards. */
+  const prefSaves = useRef(new Map<string, { busy: boolean; next?: number | null }>());
+
+  async function pushPref(lineId: string, pid: string, v: number | null) {
+    const key = `${lineId}:${pid}`;
+    const q = prefSaves.current.get(key) ?? { busy: false };
+    prefSaves.current.set(key, q);
+    if (q.busy) { q.next = v; return; }
+    q.busy = true;
+    delete q.next;
+    try {
+      const saved = await api.put<PackPerson>(`/trips/${tripId}/pack/people`, {
+        pack_item_id: lineId, participant_id: pid, pref_qty: v,
+      });
+      // A newer tap queued while we were in flight — its merge supersedes ours.
+      if (q.next === undefined) {
+        setLines((prev) => prev?.map((l) =>
+          l.id === lineId
+            ? { ...l, people: [...l.people.filter((pp) => pp.id !== saved.id && pp.participant_id !== pid), saved] }
+            : l,
+        ) ?? null);
+      }
+    } catch (e) {
+      setError(errMsg(e, "Save failed"));
+    }
+    q.busy = false;
+    if (q.next !== undefined) {
+      const nv = q.next;
+      delete q.next;
+      void pushPref(lineId, pid, nv);
+    }
+  }
+
+  // The latest *intended* value per (line, person) — a ref, so taps faster
+  // than a re-render still step from the newest value instead of a stale
+  // render closure (three same-tick clicks must give +3, not +1).
+  const prefIntent = useRef(new Map<string, number | null>());
+
   function setPref(line: PackLine, v: number | null) {
     if (!participantId) return;
+    prefIntent.current.set(`${line.id}:${participantId}`, v);
     setLines((prev) => prev?.map((l) => {
       if (l.id !== line.id) return l;
       const existing = l.people.find((pp) => pp.participant_id === participantId);
@@ -125,11 +189,15 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
             participant_id: participantId, source: null, pref_qty: v, packed: false };
       return { ...l, people: [...l.people.filter((pp) => pp.participant_id !== participantId), row] };
     }) ?? null);
-    void setPerson(line, { pref_qty: v });
+    void pushPref(line.id, participantId, v);
   }
 
   function bumpPref(line: PackLine, delta: number) {
-    const current = participantId ? personRow(line, participantId)?.pref_qty ?? null : null;
+    if (!participantId) return;
+    const key = `${line.id}:${participantId}`;
+    const current = prefIntent.current.has(key)
+      ? prefIntent.current.get(key)!
+      : personRow(line, participantId)?.pref_qty ?? null;
     // First tap on an unanswered line: "+" starts at 1, "−" answers 0 (none for me).
     const next = current == null ? Math.max(0, delta) : Math.max(0, current + delta);
     if (next !== current) setPref(line, next);
@@ -261,6 +329,28 @@ export default function MyListPage({ params }: { params: Promise<{ id: string }>
                   {prefs.filter((l) => (personRow(l, participantId)?.pref_qty ?? null) != null).length} / {prefs.length} answered
                 </Badge>
               </div>
+              {ruleStatuses.length > 0 && (
+                <div className="flex flex-col gap-1.5 px-4 sm:px-5 pb-3">
+                  {ruleStatuses.map(({ rule, target, picked, met }) => (
+                    <div key={rule.id}
+                      className="flex items-center gap-2 rounded-[9px] px-3 py-1.5 text-[12.5px]"
+                      style={{
+                        background: met ? "var(--accent-100)" : "var(--warning-bg, var(--surface-2))",
+                        color: met ? "var(--accent-600)" : "var(--text-2)",
+                        border: met ? "1px solid transparent" : "1px solid var(--border-strong)",
+                      }}>
+                      <span className="flex-none font-bold">{met ? "✓" : "!"}</span>
+                      <span className="min-w-0">
+                        {rule.message || rule.name} ({fmtQty(target)}{rule.kind === "max" ? " max" : " total"})
+                        {" — "}
+                        <span className="font-semibold">
+                          {met ? "done" : `${fmtQty(picked)} of ${fmtQty(target)} picked`}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {prefGroups.map((group) => (
                 <div key={group.label}>
                   {/* thin taxonomy band — the subcategory header style from the packing list */}
