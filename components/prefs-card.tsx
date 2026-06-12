@@ -19,6 +19,34 @@ import { attendedDays, effectivePref, fmtQty, personRow, prefRuleStatus } from "
    initialize at the item's default; only an explicit answer counts as
    "answered". Used by the My-prefs page. */
 
+/** The "Type — Category — Subcategory" section a line files under. */
+function groupLabel(l: PackLine): string {
+  return [l.item.item_type, l.item.category, l.item.subcategory].filter(Boolean).join(" — ");
+}
+
+function RuleBanner({ rule, target, picked, met }: {
+  rule: PrefRule; target: number; picked: number; met: boolean;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2 rounded-[9px] px-3 py-1.5 text-[12.5px]"
+      style={{
+        background: met ? "var(--accent-100)" : "var(--warning-bg, var(--surface-2))",
+        color: met ? "var(--accent-600)" : "var(--text-2)",
+        border: met ? "1px solid transparent" : "1px solid var(--border-strong)",
+      }}>
+      <span className="flex-none font-bold">{met ? "✓" : "!"}</span>
+      <span className="min-w-0">
+        {rule.message || rule.name} ({fmtQty(target)}{rule.kind === "max" ? " max" : " total"})
+        {" — "}
+        <span className="font-semibold">
+          {met ? "done" : `${fmtQty(picked)} of ${fmtQty(target)} picked`}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 export function PrefsCard({ tripId, lines, setLines, participantId, segments, stays, onError }: {
   tripId: string;
   lines: PackLine[];
@@ -32,6 +60,8 @@ export function PrefsCard({ tripId, lines, setLines, participantId, segments, st
 
   // Rule check: each pref rule covering this trip's prefs lines, with the
   // selected person's standing (per_day targets scale by their attended days).
+  // When all of a rule's lines sit in one taxonomy section (the typical case),
+  // `group` carries that section's label so the banner renders inside it.
   const ruleStatuses = useMemo(() => {
     if (!participantId) return [];
     const days = attendedDays(participantId, segments, stays);
@@ -43,10 +73,14 @@ export function PrefsCard({ tripId, lines, setLines, participantId, segments, st
       entry.lines.push(l);
       byRule.set(rule.id, entry);
     }
-    return [...byRule.values()].map(({ rule, lines: ruleLines }) => ({
-      rule,
-      ...prefRuleStatus(rule, ruleLines, participantId, days),
-    }));
+    return [...byRule.values()].map(({ rule, lines: ruleLines }) => {
+      const labels = new Set(ruleLines.map(groupLabel));
+      return {
+        rule,
+        group: labels.size === 1 ? [...labels][0] : null,
+        ...prefRuleStatus(rule, ruleLines, participantId, days),
+      };
+    });
   }, [prefs, participantId, segments, stays]);
 
   // Grouped under thin "Type — Category — Subcategory" headers. Lines arrive
@@ -54,8 +88,7 @@ export function PrefsCard({ tripId, lines, setLines, participantId, segments, st
   const prefGroups = useMemo(() => {
     const groups: { label: string; lines: PackLine[] }[] = [];
     for (const l of prefs) {
-      const label = [l.item.item_type, l.item.category, l.item.subcategory]
-        .filter(Boolean).join(" — ");
+      const label = groupLabel(l);
       const last = groups[groups.length - 1];
       if (last && last.label === label) last.lines.push(l);
       else groups.push({ label, lines: [l] });
@@ -157,29 +190,16 @@ export function PrefsCard({ tripId, lines, setLines, participantId, segments, st
           {answered} / {prefs.length} answered
         </Badge>
       </div>
-      {ruleStatuses.length > 0 && (
+      {/* Rules spanning more than one section show at the top; single-section
+          rules render inside their section instead (the typical case). */}
+      {ruleStatuses.some((r) => r.group == null) && (
         <div className="flex flex-col gap-1.5 px-4 sm:px-5 pb-3">
-          {ruleStatuses.map(({ rule, target, picked, met }) => (
-            <div key={rule.id}
-              className="flex items-center gap-2 rounded-[9px] px-3 py-1.5 text-[12.5px]"
-              style={{
-                background: met ? "var(--accent-100)" : "var(--warning-bg, var(--surface-2))",
-                color: met ? "var(--accent-600)" : "var(--text-2)",
-                border: met ? "1px solid transparent" : "1px solid var(--border-strong)",
-              }}>
-              <span className="flex-none font-bold">{met ? "✓" : "!"}</span>
-              <span className="min-w-0">
-                {rule.message || rule.name} ({fmtQty(target)}{rule.kind === "max" ? " max" : " total"})
-                {" — "}
-                <span className="font-semibold">
-                  {met ? "done" : `${fmtQty(picked)} of ${fmtQty(target)} picked`}
-                </span>
-              </span>
-            </div>
-          ))}
+          {ruleStatuses.filter((r) => r.group == null).map((s) => <RuleBanner key={s.rule.id} {...s} />)}
         </div>
       )}
-      {prefGroups.map((group) => (
+      {prefGroups.map((group) => {
+        const groupRules = ruleStatuses.filter((r) => r.group === group.label);
+        return (
         <div key={group.label}>
           {/* thin taxonomy band — the subcategory header style from the packing list */}
           <div className="px-4 sm:px-5 py-1" style={{ background: "var(--primary-100)" }}>
@@ -188,6 +208,11 @@ export function PrefsCard({ tripId, lines, setLines, participantId, segments, st
               {group.label}
             </span>
           </div>
+          {groupRules.length > 0 && (
+            <div className="flex flex-col gap-1.5 px-4 sm:px-5 py-2">
+              {groupRules.map((s) => <RuleBanner key={s.rule.id} {...s} />)}
+            </div>
+          )}
           {group.lines.map((line) => {
             const row = participantId ? personRow(line, participantId) : null;
             const explicit = row?.pref_qty != null;
@@ -262,7 +287,7 @@ export function PrefsCard({ tripId, lines, setLines, participantId, segments, st
             );
           })}
         </div>
-      ))}
+      );})}
     </Card>
   );
 }
